@@ -73,6 +73,35 @@ Mặc định nghe cổng **3003** → <http://localhost:3003/health>
 với `db.status = "error"` — **cố ý**: nếu trả `500` thì Render kết luận app chết và
 restart liên tục, dù app hoàn toàn bình thường và chỉ có database đang ngủ.
 
+## Deploy (Render)
+
+Render **không hỗ trợ Java native** — chỉ Node, Python, Ruby, Go, Rust và Docker.
+Nên project đi qua `Dockerfile`. Render **tự build image trên máy chủ của họ**,
+không cần cài Docker ở máy mình.
+
+Cách nhanh nhất: Dashboard → **New → Blueprint** → chọn repo này. Render đọc
+`render.yaml` và hỏi lần lượt các biến bí mật (`sync: false` nghĩa là không lưu
+vào git).
+
+Cấu hình đã chốt trong `render.yaml`:
+
+| | |
+|---|---|
+| Region | **Singapore** — cùng chỗ với Neon (`ap-southeast-1`), đỡ đi vòng trái đất mỗi truy vấn |
+| Health check | `/health` |
+| RAM | 512MB → `-XX:MaxRAMPercentage=70 -XX:+UseSerialGC`, heap tối đa ~360MB |
+| Database | **Neon**, không dùng database của Render |
+
+> 💣 **Không dùng database của Render** — nó hết hạn sau **30 ngày**.
+> Neon 500MB thì không hết hạn.
+
+**Đã đo trên máy local với đúng ràng buộc của Render** (`java -XX:MaxRAM=512m ...`):
+RAM thật 168MB, heap tối đa 360MB, khởi động 2.7s, `/health` trả `profile: prod`
+và nối được Neon **chỉ bằng biến môi trường**, không có file `.env`.
+
+Cold start của gói free: **10–30 giây** cho request đầu sau khi máy ngủ. Cộng thêm
+lần thức đầu của Neon nữa (đo được ~1.4s).
+
 ## Xử lý sự cố
 
 Cổng đã bị chiếm:
