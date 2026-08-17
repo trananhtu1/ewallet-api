@@ -1,0 +1,12 @@
+# Chuan hoa xuong dong khi lam viec tren hai may (macOS cong ty, Windows nha).
+# Thieu file nay thi core.autocrlf=true tren Windows doi mvnw thanh CRLF,
+# va bash tren Mac bao loi "bad interpreter: /bin/sh^M".
+
+* text=auto
+
+mvnw       text eol=lf
+*.sh       text eol=lf
+
+mvnw.cmd   text eol=crlf
+*.cmd      text eol=crlf
+*.bat      text eol=crlf
