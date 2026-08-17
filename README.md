@@ -89,15 +89,29 @@ Cấu hình đã chốt trong `render.yaml`:
 |---|---|
 | Region | **Singapore** — cùng chỗ với Neon (`ap-southeast-1`), đỡ đi vòng trái đất mỗi truy vấn |
 | Health check | `/health` |
-| RAM | 512MB → `-XX:MaxRAMPercentage=70 -XX:+UseSerialGC`, heap tối đa ~360MB |
+| RAM | 512MB → `-Xms64m -Xmx300m -XX:MaxMetaspaceSize=96m -XX:+UseSerialGC` |
 | Database | **Neon**, không dùng database của Render |
 
 > 💣 **Không dùng database của Render** — nó hết hạn sau **30 ngày**.
 > Neon 500MB thì không hết hạn.
 
-**Đã đo trên máy local với đúng ràng buộc của Render** (`java -XX:MaxRAM=512m ...`):
-RAM thật 168MB, heap tối đa 360MB, khởi động 2.7s, `/health` trả `profile: prod`
-và nối được Neon **chỉ bằng biến môi trường**, không có file `.env`.
+**Đã build và chạy container tại máy với đúng giới hạn của Render**
+(`docker run --memory=512m --memory-swap=512m`):
+
+| | |
+|---|---|
+| Image | 301MB |
+| RAM dùng thật | **167.6MB / 512MB** (32.7%) |
+| Heap tối đa | 300MB, nhãn `{command line}` — do tham số đặt, không phải JVM đoán |
+| Khởi động | 2.9s |
+| `/health` | `profile: prod`, `db: ok` — nối Neon **chỉ bằng biến môi trường**, không có `.env` |
+| User trong container | `spring`, không phải `root` |
+
+> ⚠️ **Không dùng `-XX:MaxRAMPercentage`.** Đo thật thì JVM có thể **không** đọc được
+> giới hạn RAM của container (kernel không phơi controller `memory` → JVM tự tắt
+> container support → đọc RAM máy thật). Khi đó `MaxRAMPercentage=70` cho ra heap
+> **8.1GB trong hộp 512MB**, và hậu quả là **kernel OOM-kill: không stack trace,
+> không log**, chỉ thấy app tự restart. Chi tiết ở [`INCIDENTS.md`](INCIDENTS.md) mục 2.
 
 Cold start của gói free: **10–30 giây** cho request đầu sau khi máy ngủ. Cộng thêm
 lần thức đầu của Neon nữa (đo được ~1.4s).

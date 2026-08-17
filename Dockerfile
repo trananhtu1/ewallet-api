@@ -32,12 +32,31 @@ USER spring
 
 COPY --from=build /app/target/*.jar app.jar
 
-# 512MB của Render rất chật cho Spring Boot.
-# MaxRAMPercentage=70 -> heap tối đa ~360MB, chừa phần còn lại cho metaspace,
-# thread stack và bộ nhớ ngoài heap. Không đặt thì JVM lấy 25% = quá ít.
-# UseSerialGC -> GC một luồng, ít tốn RAM hơn G1 mặc định. Máy 512MB thì
-# G1 vừa ngốn bộ nhớ vừa không có lợi vì chỉ có ít CPU.
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+UseSerialGC"
+# 512MB của Render rất chật cho Spring Boot. Phân bổ:
+#   heap 300MB + metaspace <=96MB + thread stack/code cache/direct buffer ~80MB
+#   = ~476MB, chừa margin dưới 512MB.
+#
+# ⚠️ DÙNG -Xmx TUYỆT ĐỐI, KHÔNG dùng -XX:MaxRAMPercentage. Đã đo và đây là lý do:
+# MaxRAMPercentage tính theo RAM mà JVM *nghĩ* là có. JVM biết được giới hạn
+# container nhờ đọc cgroup, nhưng việc đó KHÔNG luôn thành công. Trên Docker
+# Desktop/WSL2 thử thật thì:
+#     java -Xlog:os+container=trace  ->  "controller memory is not enabled"
+#                                        "required controllers disabled at kernel level"
+# JVM tự tắt container support rồi đọc RAM máy thật (11.9GB), nên
+# MaxRAMPercentage=70 cho ra heap 8.1GB TRONG container 512MB.
+#
+# Hậu quả nếu để vậy: heap phình quá 512MB -> KERNEL giết container (OOM-kill).
+# Không phải OutOfMemoryError của Java - không stack trace, không log, chỉ thấy
+# Render restart. Loại lỗi tệ nhất để chẩn đoán.
+#
+# Trên Render (Linux thật, cgroup v2 đủ controller) thì JVM có thể dò đúng. Nhưng
+# gói free là 512MB cố định - biết trước con số thì đặt thẳng, khỏi phụ thuộc vào
+# việc dò có thành công hay không. Rẻ hơn và kiểm chứng được ở mọi môi trường.
+#
+# UseSerialGC -> GC một luồng, ít tốn RAM hơn G1 mặc định. Máy 512MB ít CPU thì
+# G1 vừa ngốn bộ nhớ vừa không có lợi.
+# MaxMetaspaceSize -> chặn metaspace phình vô hạn; Spring nạp rất nhiều class.
+ENV JAVA_OPTS="-Xms64m -Xmx300m -XX:MaxMetaspaceSize=96m -XX:+UseSerialGC"
 
 # Dùng "sh -c" để $JAVA_OPTS được shell khai triển thành nhiều tham số.
 # Viết ENTRYPOINT ["java", "$JAVA_OPTS", ...] thì $JAVA_OPTS bị truyền nguyên

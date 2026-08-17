@@ -1,0 +1,21 @@
+# Docker gửi toàn bộ thư mục này cho daemon trước khi build ("build context").
+# Không loại trừ thì nó gửi cả target/ 22MB và .git - build chậm vô ích.
+#
+# Quan trọng hơn: .env chứa mật khẩu Neon. Dockerfile không COPY nó vào image,
+# nhưng chặn ngay từ context thì nó không bao giờ rời khỏi máy này. Rẻ hơn là
+# tin vào việc mình sẽ không bao giờ viết sai một dòng COPY.
+
+.env
+.env.*
+!.env.example
+
+target/
+.git/
+.gitignore
+.gitattributes
+.idea/
+*.iml
+
+README.md
+INCIDENTS.md
+render.yaml
