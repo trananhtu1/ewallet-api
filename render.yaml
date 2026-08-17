@@ -1,0 +1,43 @@
+# Render Blueprint - khai báo hạ tầng bằng file thay vì bấm trên web.
+# Lợi ích thật: deploy lại từ đầu hoặc dựng lại sau khi xoá nhầm thì không phải
+# nhớ đã bấm những gì. Cấu hình nằm trong git, xem được lịch sử thay đổi.
+#
+# Cách dùng: Render Dashboard -> New -> Blueprint -> chọn repo này.
+
+services:
+  - type: web
+    name: ewallet-api
+    # Java không có runtime native trên Render, phải qua docker.
+    runtime: docker
+    plan: free
+    # Singapore là region gần Việt Nam nhất, và cùng chỗ với database Neon
+    # (ap-southeast-1) -> mỗi truy vấn đỡ đi vòng nửa vòng trái đất.
+    region: singapore
+    dockerfilePath: ./Dockerfile
+
+    # Render gọi đường dẫn này để biết app còn sống. Trỏ vào /health là đúng
+    # chỗ. Lưu ý /health CỐ Ý trả 200 kể cả khi database lỗi - nếu trả 500 thì
+    # Render kết luận app chết và restart vô hạn dù chỉ có Neon đang ngủ.
+    healthCheckPath: /health
+
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+
+      # sync: false = Render HỎI giá trị lúc tạo, KHÔNG lưu vào file này.
+      # Bí mật không bao giờ được nằm trong git.
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+
+      # Điền domain Vercel thật sau khi deploy frontend.
+      # Sai giá trị này là frontend báo lỗi CORS trên production.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+# KHÔNG khai báo database ở đây. Database của Render HẾT HẠN SAU 30 NGÀY -
+# deploy 23/08 thì nó chết khoảng 22/09, đúng lúc bắt đầu rải CV.
+# Dùng Neon (500MB, không hết hạn) và truyền vào qua SPRING_DATASOURCE_URL.
