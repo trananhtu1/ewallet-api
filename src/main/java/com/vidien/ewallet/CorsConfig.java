@@ -1,5 +1,8 @@
 package com.vidien.ewallet;
 
+import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -23,12 +26,23 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
+  // Tương đương console.log nhưng dùng được ở production.
+  // static final vì mỗi class chỉ cần một logger, không tạo lại mỗi lần new.
+  // Truyền CorsConfig.class để log tự hiện tên class - khỏi tự gõ tên vào chuỗi.
+  private static final Logger log = LoggerFactory.getLogger(CorsConfig.class);
+
   private final String[] allowedOrigins;
 
   // Chuỗi phân cách bằng dấu phẩy -> Spring tự tách thành String[].
   // Ví dụ: CORS_ALLOWED_ORIGINS=http://localhost:5173,https://ewallet-web.vercel.app
   public CorsConfig(@Value("${app.cors.allowed-origins}") String[] allowedOrigins) {
     this.allowedOrigins = allowedOrigins;
+
+    // Arrays.toString() vì mảng truyền thẳng vào {} sẽ bị coi là varargs ->
+    // chỉ in phần tử đầu, im lặng bỏ phần còn lại.
+    // Log kèm số lượng để biết chuỗi có tách đúng dấu phẩy không.
+    log.info("CORS cho phep {} origin: {}", allowedOrigins.length,
+        Arrays.toString(allowedOrigins));
   }
 
   @Override
@@ -36,6 +50,9 @@ public class CorsConfig implements WebMvcConfigurer {
     // Để trống biến -> không đăng ký gì -> lỗi CORS quay lại y như cũ.
     // Giữ đường này để còn tái hiện được sự cố mà xem lại, không phải để cho vui.
     if (allowedOrigins.length == 0 || allowedOrigins[0].isBlank()) {
+      // warn, không phải info: đây là trạng thái bất thường mà không phải lỗi.
+      // Trên production nhìn thấy dòng này là biết ngay vì sao FE gọi không được.
+      log.warn("Khong co origin nao duoc phep -> loi CORS se xuat hien. Kiem tra bien CORS_ALLOWED_ORIGINS.");
       return;
     }
 
