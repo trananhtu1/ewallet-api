@@ -20,7 +20,9 @@ RUN mvn clean package -DskipTests -B
 
 # ===== Tầng 2: CHẠY =====
 # Chỉ cần JRE để chạy, không cần JDK và không cần Maven.
-# Bản alpine nhỏ hơn nhiều -> image cuối ~200MB thay vì ~700MB.
+# Bản alpine nhỏ hơn nhiều. Đo thật 20/08: image cuối 301MB (không phải ~200MB như
+# ước lượng ban đầu) - vẫn nhỏ hơn nhiều so với gộp một tầng, vì tầng build kèm
+# JDK + Maven ~500MB đã bị bỏ lại.
 # Image nhỏ = deploy nhanh hơn, cold start của Render ngắn hơn.
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
