@@ -15,10 +15,18 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
 
-    # Render gọi đường dẫn này để biết app còn sống. Trỏ vào /health là đúng
-    # chỗ. Lưu ý /health CỐ Ý trả 200 kể cả khi database lỗi - nếu trả 500 thì
-    # Render kết luận app chết và restart vô hạn dù chỉ có Neon đang ngủ.
-    healthCheckPath: /health
+    # Render gọi đường dẫn này liên tục để biết app còn sống, và GIẾT app nếu
+    # không trả lời kịp. Nên nó phải trỏ vào /ping - endpoint KHÔNG chạm database.
+    #
+    # Trước đây trỏ vào /health và đó là nguyên nhân lần deploy đầu 20/08 đổ:
+    # /health đi hỏi Neon, mật khẩu sai nên Hikari chờ hết connection-timeout 10s,
+    # Render bỏ cuộc trước đó. Bài học ghi ở INCIDENTS.md mục 3: liveness probe
+    # không được phụ thuộc dịch vụ ngoài. Neon free tự ngủ - kể cả không ai sai
+    # mật khẩu thì sớm muộn cũng có ngày deploy trúng lúc nó đang ngủ.
+    #
+    # /health vẫn còn, vẫn chạm database, vẫn cố ý trả 200 khi DB lỗi - nhưng
+    # dành cho người chẩn đoán, không dành cho máy quyết định sống chết.
+    healthCheckPath: /ping
 
     envVars:
       - key: SPRING_PROFILES_ACTIVE

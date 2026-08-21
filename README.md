@@ -56,6 +56,22 @@ Mặc định nghe cổng **3003** → <http://localhost:3003/health>
 
 ## Endpoint
 
+Hai endpoint, hai câu hỏi khác nhau. Đừng gộp — lý do ở `INCIDENTS.md` mục 3 và 4.
+
+| Endpoint | Trả lời câu gì | Chạm DB? | Ai gọi |
+|---|---|---|---|
+| `/ping` | tiến trình còn sống không | ❌ | **Render** (`healthCheckPath`) |
+| `/health` | mọi thứ có ổn không | ✅ chờ tối đa **2s** | người, lúc chẩn đoán |
+
+### `GET /ping`
+
+```json
+{ "status": "ok" }
+```
+
+Không I/O, không database, không phụ thuộc gì bên ngoài. Đo với mật khẩu Neon
+cố ý sai: vẫn trả trong **20ms**.
+
 ### `GET /health`
 
 ```json
@@ -69,9 +85,20 @@ Mặc định nghe cổng **3003** → <http://localhost:3003/health>
 }
 ```
 
-`db` chạy `SELECT 1` thật sang database. Khi database lỗi, endpoint vẫn trả `200`
-với `db.status = "error"` — **cố ý**: nếu trả `500` thì Render kết luận app chết và
+`db` chạy `SELECT 1` thật sang database — truy vấn rẻ nhất chứng minh được cả
+chuỗi kết nối lẫn mật khẩu đều đúng. Bốn giá trị `db.status` có thể gặp:
+
+| `db.status` | Nghĩa là gì |
+|---|---|
+| `ok` | nối được, `ms` là độ trễ thật |
+| `timeout` | database không trả lời trong **2s** |
+| `error` | truy vấn ném lỗi — sai mật khẩu, mất mạng… (`error` ghi lỗi gốc, đã `getCause()`) |
+| `busy` | đang có phép thử khác treo và hàng đợi đầy → từ chối ngay thay vì xếp hàng |
+
+**Cả bốn đều trả HTTP `200`** — cố ý. Trả `500` thì nền tảng kết luận app chết và
 restart liên tục, dù app hoàn toàn bình thường và chỉ có database đang ngủ.
+Nhưng lưu ý: chính vì `/health` chạm database nên nó **không** được làm liveness
+probe — đó là việc của `/ping`.
 
 ## Deploy (Render)
 
@@ -88,7 +115,7 @@ Cấu hình đã chốt trong `render.yaml`:
 | | |
 |---|---|
 | Region | **Singapore** — cùng chỗ với Neon (`ap-southeast-1`), đỡ đi vòng trái đất mỗi truy vấn |
-| Health check | `/health` |
+| Health check | `/ping` — **không** `/health`, xem `INCIDENTS.md` mục 3 |
 | RAM | 512MB → `-Xms64m -Xmx300m -XX:MaxMetaspaceSize=96m -XX:+UseSerialGC` |
 | Database | **Neon**, không dùng database của Render |
 
