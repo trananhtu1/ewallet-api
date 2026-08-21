@@ -256,19 +256,21 @@ Nghi dấu `/` ở cuối domain làm hỏng so khớp origin. Đo hai lượt t
 **Spring tự cắt dấu `/` thừa.** Bỏ dấu `/` vẫn là thói quen tốt, nhưng nó **không** phải
 nguyên nhân — giữ lại đây để khỏi đi lại đường cụt đó lần sau.
 
-### 🔴 Còn nợ — cái bẫy vẫn nằm nguyên đó
+### ✅ Khoản nợ đã trả — 21/08
 
-Sửa mật khẩu chỉ giải quyết *lần này*. Gốc vấn đề chưa đụng tới: **liveness probe không
-được phụ thuộc vào dịch vụ ngoài.** Render hỏi *"app còn sống không"*, mà `/health` lại đi
-hỏi Neon hộ nó. Neon free **tự ngủ** khi không ai dùng → sẽ có ngày deploy lại đúng lúc
-Neon ngủ, `/health` chậm, `Deploy failed` — mà chẳng có gì sai cả.
+Sửa mật khẩu chỉ giải quyết *lần này*. Gốc vấn đề là: **liveness probe không được phụ
+thuộc vào dịch vụ ngoài.** Render hỏi *"app còn sống không"*, mà `/health` lại đi hỏi Neon
+hộ nó. Neon free **tự ngủ** khi không ai dùng → sẽ có ngày deploy lại đúng lúc Neon ngủ,
+`/health` chậm, `Deploy failed` — mà chẳng có gì sai cả.
 
-Cần tách hai loại, chưa làm:
+Đã tách hai loại ngày 21/08:
 
-| Endpoint | Trả lời câu gì | Chạm DB? | Ai gọi |
-|---|---|---|---|
-| `/ping` | app còn sống không | ❌ | Render (`healthCheckPath`) |
-| `/health` | mọi thứ có ổn không | ✅ nhưng chờ tối đa 2s | người, lúc chẩn đoán |
+| Endpoint | Trả lời câu gì | Chạm DB? | Ai gọi | Đo với mật khẩu cố ý sai |
+|---|---|---|---|---|
+| `/ping` | app còn sống không | ❌ | Render (`healthCheckPath`) | **20ms** |
+| `/health` | mọi thứ có ổn không | ✅ chờ tối đa 2s | người, lúc chẩn đoán | **2.01s** (trước: 10s) |
+
+Nhưng việc bọc timeout ấy lại **đẻ ra một cái bẫy mới**, tệ hơn cái nó vá — xem mục 4.
 
 ### 🎤 Câu chuyện phỏng vấn
 
@@ -285,3 +287,122 @@ Cần tách hai loại, chưa làm:
 Không bịa được: có con số (10 giây = `connection-timeout`), có cách phát hiện (dựng lại
 điều kiện production tại máy để loại nghi phạm), và có phần tự phản biện (thiết kế `/health`
 của chính mình sai chỗ nào).
+
+---
+
+## 4. Pool tự tạo ra mà không ai dùng — `CompletableFuture` lặng lẽ đẻ một OS thread cho mỗi request
+
+| | |
+|---|---|
+| **Ngày** | 21/08/2026 |
+| **Hiện tượng** | Không có. Đây là bẫy **chặn được trước khi nổ**, giống mục 2. Code vá timeout cho `/health` (mục 3) chạy đúng ở máy, test đúng, và mang một lỗi chỉ lộ ra trên container. |
+| **Tìm ra bằng cách nào** | Thêm **tạm** một trường `thread` vào JSON của `/health` để xem query thật sự chạy ở đâu. Ra `"thread":"ForkJoinPool.commonPool-worker-1"` — trong khi trong file có sẵn một pool tên `db-health-check` **chưa từng chạy dòng nào**. Chạy lại với `-XX:ActiveProcessorCount=1` để giả lập container thì tên thread đổi thành `Thread-0`, và gọi bốn lần ra `Thread-1`, `Thread-2`, `Thread-3`, `Thread-4` — **mỗi request một OS thread mới**. |
+| **Nguyên nhân gốc** | `CompletableFuture.supplyAsync(supplier)` thiếu tham số executor thì dùng `ASYNC_POOL`. Đọc thẳng `src.zip` của JDK 17: `USE_COMMON_POOL = (ForkJoinPool.getCommonPoolParallelism() > 1)` — **`> 1`, không phải `> 0`**. Container 1 nhân cho parallelism = 1, `1 > 1` là **sai**, nên JDK rơi xuống `ThreadPerTaskExecutor`, mà thân hàm của nó đúng một dòng: `new Thread(r).start()`. Không pool, không hàng đợi, không trần. |
+| **Cách sửa** | Truyền executor tường minh: `supplyAsync(supplier, DB_CHECK_POOL)`, với `DB_CHECK_POOL` là `ThreadPoolExecutor(2, 2, …, new ArrayBlockingQueue<>(2), factory, AbortPolicy)` — thread daemon đặt tên `db-health-check`. |
+
+### Điều phản trực giác — phần đáng kể nhất
+
+**Cùng một dòng code, đúng ở máy 8 nhân, sai ở hộp 1 nhân.** Không phải "chậm hơn" —
+mà đi vào một nhánh code hoàn toàn khác của JDK. Đo cạnh nhau:
+
+| | Máy nhà | Ép `-XX:ActiveProcessorCount=1` |
+|---|---|---|
+| `availableProcessors()` | 8 | 1 |
+| `getCommonPoolParallelism()` | 7 | 1 |
+| `USE_COMMON_POOL` (`> 1`) | ✅ đúng | ❌ **sai** |
+| Thread chạy query | `ForkJoinPool.commonPool-worker-1` | `Thread-1`, `Thread-2`, `Thread-3`… |
+| Trần số thread | 7 | **không có** |
+
+Và đây đúng loại chết đã gặp ở mục 2: thread tràn trong hộp 512MB thì kernel **OOM-kill**,
+không stack trace, không log, chỉ thấy app tự restart.
+
+### Hai điều tra được từ `src.zip`, cả hai đều ngược với cái mình tưởng
+
+**a. `probe.cancel(true)` không dừng được query.** Javadoc `CompletableFuture.cancel`
+ghi thẳng: *"this value has no effect in this implementation because interrupts are not
+used to control processing"*. Nên hết 2 giây là **ngừng chờ**, không phải **ngừng chạy** —
+thread vẫn bị giữ tới khi Hikari bỏ cuộc ở giây thứ 10. Cắt ngang không được thì phải
+chặn ở **đầu vào**, đó mới là lý do pool phải có trần.
+
+**b. `Executors.newFixedThreadPool(2)` KHÔNG giới hạn việc.** Nó là
+`new ThreadPoolExecutor(n, n, 0L, MILLISECONDS, new LinkedBlockingQueue<>())` — hàng đợi
+**không có trần**. Giới hạn số thread mà không giới hạn hàng đợi thì database chết là
+task xếp hàng vô tận, im lặng. Có trần mới có backpressure.
+
+### Đo sau khi sửa — bắn 6 request đồng thời, mật khẩu cố ý sai
+
+| Đo | Kết quả |
+|---|---|
+| `jcmd <pid> Thread.print` | đúng **2** thread `db-health-check` (daemon) · **0** thread `Thread-N` · **0** `ForkJoinPool` |
+| 6 request | 4 × `db.status=timeout` (2 chạy + 2 xếp hàng) · 2 × `db.status=busy` (bị từ chối ngay) |
+| Mã HTTP | **cả 6 đều `200`** — không cái nào thành `500` |
+
+Nhánh `busy` là chỗ dễ bỏ sót nhất: `AbortPolicy` ném `RejectedExecutionException`, mà nó
+là `RuntimeException` — không bắt thì nó bay lên thành **HTTP 500**, đúng cái `/health`
+được viết ra để tránh. Ba `catch` ban đầu (`Timeout`, `Execution`, `Interrupted`) đều
+không đỡ được nó vì nó ném lúc **nộp việc**, chưa tới lúc **chờ việc**.
+
+### Chỗ phải nói trung thực
+
+Con số 1 nhân là **giả lập bằng `-XX:ActiveProcessorCount=1`, chưa đo trên Render**.
+Chưa biết Render free báo `availableProcessors()` là mấy — nếu nó báo ≥ 3 thì
+`USE_COMMON_POOL` đúng và bẫy `ThreadPerTaskExecutor` không bật.
+
+Vẫn sửa, vì hai lý do độc lập với số nhân:
+
+1. `commonPool` là pool **dùng chung của cả JVM**, sinh ra cho việc ngốn CPU. Ném vào đó
+   một việc ngồi chờ mạng 10 giây là chiếm chỗ của mọi `parallelStream` và mọi
+   `CompletableFuture` khác trong app — bây giờ chưa có, Week 3 trở đi thì có.
+2. Kiểu chết khi đoán sai là kiểu **không có log** (mục 2 đã trả giá một lần).
+
+Cách đo khi cần chốt: thêm một dòng log `Runtime.getRuntime().availableProcessors()` lúc
+khởi động rồi đọc log Render — rẻ, làm lúc deploy lần tới.
+
+### Tái hiện
+
+```bash
+# 1. Xem query chạy ở thread nào: thêm tạm vào checkDatabase()
+#    result.put("thread", Thread.currentThread().getName())  -> trong supplier
+
+# 2. Giả lập container 1 nhân
+./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-XX:ActiveProcessorCount=1"
+
+# 3. So hai con so quyet dinh - file roi, chay bang single-file source (JDK 11+)
+cat > Fjp.java <<'EOF'
+import java.util.concurrent.ForkJoinPool;
+public class Fjp {
+  public static void main(String[] a) {
+    System.out.println(Runtime.getRuntime().availableProcessors()
+        + " nhan -> getCommonPoolParallelism() = " + ForkJoinPool.getCommonPoolParallelism());
+  }
+}
+EOF
+java Fjp.java                            # 8 nhan -> 7  => "> 1" DUNG
+java -XX:ActiveProcessorCount=1 Fjp.java # 1 nhan -> 1  => "> 1" SAI
+
+# 4. Ép nhánh busy: mật khẩu sai + bắn 6 request cùng lúc
+SPRING_DATASOURCE_PASSWORD=co-y-sai ./mvnw spring-boot:run
+for i in 1 2 3 4 5 6; do curl -s localhost:3003/health & done
+
+# 5. Đếm thread thật
+jcmd <pid> Thread.print | grep -E '^"(db-health-check|Thread-|ForkJoinPool)'
+```
+
+### 🎤 Câu chuyện phỏng vấn
+
+> *"Em bọc timeout cho health check bằng `CompletableFuture.supplyAsync`, có tạo hẳn một
+> thread pool riêng. Chạy ở máy thì đúng. Nhưng em thêm tạm tên thread vào response để
+> kiểm tra, và thấy query chạy ở `ForkJoinPool.commonPool-worker-1` — cái pool em tạo ra
+> chưa từng chạy dòng nào, vì em quên truyền nó vào `supplyAsync`. Em ép JVM về 1 nhân cho
+> giống container thì tên thread đổi thành `Thread-1`, `Thread-2`, `Thread-3` — mỗi request
+> một OS thread mới. Đọc `src.zip` của JDK thì thấy điều kiện là
+> `getCommonPoolParallelism() > 1`, dấu lớn hơn 1 chứ không phải lớn hơn 0, nên container
+> 1 nhân rơi vào nhánh `ThreadPerTaskExecutor` gọi thẳng `new Thread().start()`, không
+> trần. Trong hộp 512MB thì đó là đường dẫn tới OOM-kill không có log. Em sửa bằng
+> `ThreadPoolExecutor` có hàng đợi chặn — cố ý không dùng `newFixedThreadPool` vì hàng đợi
+> của nó vô hạn — và bắt thêm `RejectedExecutionException`, vì nó ném lúc nộp việc nên ba
+> catch cũ không đỡ được và sẽ thành HTTP 500. Chỗ em phải nói thật là em mới giả lập 1
+> nhân ở máy, chưa đo trên Render."*
+
+Không bịa được: có con số (8/7 so với 1/1, 6 request ra 4 + 2), có cách phát hiện (in tên
+thread ra rồi ép số nhân), có chỗ đọc source thay vì đoán, và có phần tự nhận cái chưa đo.
