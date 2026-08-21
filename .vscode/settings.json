@@ -1,0 +1,30 @@
+{
+  // Luu file -> tu them import con thieu, tu xoa import khong dung toi.
+  // Day la thu thay the viec go tay 6 dong java.util.concurrent.*
+  "java.saveActions.organizeImports": true,
+
+  // Go ten class chua import -> goi y hien ngay, chon la tu them import.
+  "java.completion.importOrder": ["java", "javax", "org", "com"],
+
+  // Luu file -> tu can le lai theo Google Java Style.
+  // Dieu kien ghi o day truoc kia ("phai cai formatter Google Style truoc") da xong:
+  // .vscode/java-google-style.xml la profile chinh chu cua Google, indent 2 space,
+  // lineSplit 100 - khop dung code dang co va khop editor.rulers ben duoi.
+  //
+  // KHONG bat formatOnSave khi chua co file nay: formatter mac dinh cua Red Hat Java
+  // la Eclipse style 4 space, luu mot file la ca file bi thut lai thanh diff rac.
+  //
+  // File XML duoc commit vao repo (khong dung URL) de may Mac o cong ty format
+  // giong het, va de khong phu thuoc mang luc luu file.
+  "java.format.settings.url": ".vscode/java-google-style.xml",
+  "java.format.settings.profile": "GoogleStyle",
+  "[java]": {
+    "editor.defaultFormatter": "redhat.java",
+    "editor.formatOnSave": true
+  },
+
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.rulers": [100]
+}

@@ -14,7 +14,13 @@ target/
 *.iws
 *.iml
 *.ipr
-.vscode/
+# Ignore NOI DUNG cua .vscode (.vscode/*), khong phai thu muc (.vscode/).
+# Git khong di vao thu muc da bi loai, nen "!" ben duoi chi co tac dung
+# khi dong tren la .vscode/* - viet .vscode/ thi ba dong ! duoi day vo nghia.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/java-google-style.xml
 .classpath
 .project
 .settings/
