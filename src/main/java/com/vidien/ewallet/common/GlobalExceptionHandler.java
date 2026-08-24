@@ -9,7 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -24,7 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
  * @RestControllerAdvice = @ControllerAdvice + @ResponseBody: giá trị trả về được Jackson biến thành
  * JSON, không phải tên của một trang HTML.
  */
-@RestController
+@RestControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 

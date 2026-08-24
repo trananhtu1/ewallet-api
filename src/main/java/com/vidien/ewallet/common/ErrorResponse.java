@@ -3,13 +3,11 @@ package com.vidien.ewallet.common;
 import java.time.Instant;
 import java.util.List;
 
-import org.springframework.validation.FieldError;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ErrorResponse(Instant timestamp, int status, String code, String message, String path,
-        List<FieldError> fieldError) {
+        List<FieldError> fieldErrors) {
     /**
      * Một field trượt một luật. Là DANH SÁCH chứ không phải map {field: message}, vì một field có
      * thể trượt nhiều luật cùng lúc.
