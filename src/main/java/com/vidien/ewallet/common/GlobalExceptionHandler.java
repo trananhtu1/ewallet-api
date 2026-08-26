@@ -1,7 +1,6 @@
 package com.vidien.ewallet.common;
 
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -10,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
@@ -70,6 +70,28 @@ public class GlobalExceptionHandler {
 
                 ErrorResponse body = ErrorResponse.of(400, "MALFORMED_JSON",
                                 "Body gửi lên không đọc được", request.getRequestURI());
+
+                return ResponseEntity.badRequest().body(body);
+        }
+
+        /**
+         * Sai KIỂU ở tham số URL: /api/wallets/abc trong khi {id} cần số.
+         *
+         * <p>
+         * Chết ở bước Spring chuyển chuỗi thành long, TRƯỚC khi thân controller chạy. Cùng họ với
+         * HttpMessageNotReadableException ở trên: cái chết lúc đang dựng tham số thì @Valid không
+         * tới lượt.
+         */
+        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<ErrorResponse> handleTypeMismatch(
+                        MethodArgumentTypeMismatchException e, HttpServletRequest request) {
+                // WARN, không ERROR, và KHÔNG kèm stack trace: lỗi của client, app vẫn khoẻ.
+                log.warn("Tham so '{}' sai kieu tai {}: nhan duoc \"{}\"", e.getName(),
+                                request.getRequestURI(), e.getValue());
+
+                ErrorResponse body = ErrorResponse.of(400, "INVALID_PARAMETER",
+                                "Tham số '" + e.getName() + "' phải là số nguyên",
+                                request.getRequestURI());
 
                 return ResponseEntity.badRequest().body(body);
         }
