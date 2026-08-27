@@ -34,4 +34,23 @@ public class TransactionRepository {
                 .param("amount", amount)
                 .update();
     }
+
+    /**
+     * Ghi mot lan chuyen tien thanh cong vao so cai.
+     *
+     * <p>
+     * Chua ghi duoc dong status='FAILED': no nam trong chinh cai transaction bi rollback nen
+     * se bien mat cung. Muon giu lai phai dung transaction rieng (propagation REQUIRES_NEW).
+     * Ghi lai lam mon no, chua lam.
+     */
+    public void insertTransfer(long fromWalletId, long toWalletId, BigDecimal amount) {
+        db.sql("""
+                INSERT INTO transactions (from_wallet_id, to_wallet_id, amount, type, status)
+                VALUES (:fromWalletId, :toWalletId, :amount, 'TRANSFER', 'SUCCESS')
+                """)
+                .param("fromWalletId", fromWalletId)
+                .param("toWalletId", toWalletId)
+                .param("amount", amount)
+                .update();
+    }
 }

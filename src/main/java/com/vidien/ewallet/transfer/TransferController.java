@@ -1,41 +1,36 @@
 package com.vidien.ewallet.transfer;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.vidien.ewallet.common.ErrorResponse;
-import jakarta.servlet.http.HttpServletRequest;
+import com.vidien.ewallet.wallet.Wallet;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/transfers")
 public class TransferController {
-    private static final Logger log = LoggerFactory.getLogger(TransferController.class);
+
+    private final TransferService transferService;
+
+    public TransferController(TransferService transferService) {
+        this.transferService = transferService;
+    }
 
     /**
-     * @Valid = câu lệnh "đọc sổ đi". Thiếu chữ này thì mọi annotation trong TransferRequest im lặng
-     *        không chạy, và amount = -999999 đi thẳng xuống dưới.
+     * Tra ve vi NGUON sau khi chuyen - thu nguoi goi muon biet nhat la "toi con bao nhieu".
      *
-     *        <p>
-     * @RequestBody = "đọc từ thân request, để Jackson dựng object". Thiếu chữ này thì Spring lại đi
-     *              tìm dữ liệu ở query string, và mọi field sẽ là null.
+     * <p>
+     * @Valid = cau lenh "doc so di". Thieu chu nay thi moi annotation trong TransferRequest im
+     * lang khong chay, va amount = -999999 di thang xuong duoi.
+     *
+     * <p>
+     * @RequestBody = "doc tu than request". Thieu chu nay thi Spring di tim du lieu o query
+     * string, va moi field se la null.
      */
     @PostMapping
-    public ResponseEntity<ErrorResponse> create(@Valid @RequestBody TransferRequest request,
-            HttpServletRequest httpRequest) {
-        // Dòng log này là BẰNG CHỨNG của cả bài học: nó chỉ in ra khi dữ liệu đã sạch.
-        // Bắn amount = -5 thì sẽ KHÔNG thấy dòng này trong console - thân method không
-        // hề chạy, Spring đã chặn từ trước khi vào đây.
-        log.info("Valid da qua: {} => {} , so tien {}", request.fromWalletId(),
-                request.toWalletId(), request.amount());
-        ErrorResponse body = ErrorResponse.of(501, "NOT_IMPLEMENTED",
-                "Chức năng chuyển tiền chưa được cài đặt", httpRequest.getRequestURI());
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(body);
-
+    public Wallet create(@Valid @RequestBody TransferRequest request) {
+        return transferService.transfer(request.fromWalletId(), request.toWalletId(),
+                request.amount());
     }
 }

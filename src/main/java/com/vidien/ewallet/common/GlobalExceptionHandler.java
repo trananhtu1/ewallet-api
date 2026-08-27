@@ -10,6 +10,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.vidien.ewallet.wallet.InsufficientFundsException;
+import com.vidien.ewallet.wallet.SameWalletTransferException;
 import com.vidien.ewallet.wallet.WalletNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -139,5 +141,35 @@ public class GlobalExceptionHandler {
                                 "Không tìm thấy ví", request.getRequestURI());
 
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+        }
+
+        /**
+         * So du khong du. 409 CONFLICT chu khong phai 400: body gui len HOP LE hoan toan, chi
+         * la trang thai hien tai cua he thong khong cho phep. 400 se khien client tuong minh
+         * gui sai va sua body - vo ich.
+         *
+         * <p>
+         * So du that KHONG ra ngoai response: no la thong tin cua chu vi, con nguoi goi API thi
+         * chua chac la chu vi (chua co JWT). Chi tiet o lai log.
+         */
+        @ExceptionHandler(InsufficientFundsException.class)
+        public ResponseEntity<ErrorResponse> handleInsufficientFunds(InsufficientFundsException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(409, "INSUFFICIENT_FUNDS",
+                                "Số dư không đủ để thực hiện giao dịch", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
+
+        /** Chuyen tien cho chinh minh: body sai that, nen 400. */
+        @ExceptionHandler(SameWalletTransferException.class)
+        public ResponseEntity<ErrorResponse> handleSameWallet(SameWalletTransferException e,
+                        HttpServletRequest request) {
+                ErrorResponse body = ErrorResponse.of(400, "SAME_WALLET",
+                                "Ví nguồn và ví đích phải khác nhau", request.getRequestURI());
+
+                return ResponseEntity.badRequest().body(body);
         }
 }
