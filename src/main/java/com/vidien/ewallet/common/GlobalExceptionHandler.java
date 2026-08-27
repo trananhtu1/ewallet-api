@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.vidien.ewallet.wallet.WalletNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
@@ -119,5 +120,24 @@ public class GlobalExceptionHandler {
                                 request.getRequestURI());
 
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+        }
+
+        /**
+         * Vi khong ton tai. Nem tu tang service, dich sang 404 o day.
+         *
+         * <p>
+         * Chi tiet id nam trong e.getMessage() va o lai server: response chi noi "khong tim
+         * thay vi". Bien nay khong nhay cam lam, nhung giu dung mot luat cho ca file thi khong
+         * phai nho ngoai le.
+         */
+        @ExceptionHandler(WalletNotFoundException.class)
+        public ResponseEntity<ErrorResponse> handleWalletNotFound(WalletNotFoundException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(404, "WALLET_NOT_FOUND",
+                                "Không tìm thấy ví", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
         }
 }

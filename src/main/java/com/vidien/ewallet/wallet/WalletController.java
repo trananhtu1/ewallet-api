@@ -1,34 +1,47 @@
 package com.vidien.ewallet.wallet;
 
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import com.vidien.ewallet.common.ErrorResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import java.util.Optional;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
-
+/**
+ * Chi noi chuyen voi WalletService, khong cam thang repository.
+ *
+ * <p>
+ * Truoc day method findOne tu kiem Optional roi tu dung ErrorResponse 404. Bo di vi hai ly do:
+ * hai duong vao cung mot bang thi som muon co mot luat nghiep vu chi ap cho mot duong, va viec
+ * dich loi sang HTTP da co GlobalExceptionHandler lam roi. Khong tim thay vi thi nem
+ * WalletNotFoundException, phan con lai khong phai viec cua controller.
+ */
 @RestController
 @RequestMapping("/api/wallets")
 public class WalletController {
-    private final WalletRepository wallets;
 
-    public WalletController(WalletRepository wallets) {
-        this.wallets = wallets;
+    private final WalletService walletService;
+
+    public WalletController(WalletService walletService) {
+        this.walletService = walletService;
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> findOne(@PathVariable long id, HttpServletRequest request) {
-        Optional<Wallet> found = wallets.findById(id);
+    public Wallet findOne(@PathVariable long id) {
+        return walletService.findById(id);
+    }
 
-        if (found.isPresent()) {
-            return ResponseEntity.ok(found.get());
-        }
-
-        ErrorResponse body = ErrorResponse.of(404, "WALLET_NOT_FOUND", "Không tìm thấy ví",
-                request.getRequestURI());
-        return ResponseEntity.status(404).body(body);
+    /**
+     * POST /{id}/deposits - duong dan la DANH TU SO NHIEU, khong phai dong tu ("/deposit" hay
+     * "/nap-tien"). Moi lan goi la tao them mot ban ghi nap tien trong bo suu tap do.
+     *
+     * <p>
+     * @Valid la LENH doc cac annotation tren DepositRequest. Thieu no thi cac luat trong DTO
+     * nam im, khong ai kiem, va so tien 0.001 di thang xuong database.
+     */
+    @PostMapping("/{id}/deposits")
+    public Wallet deposit(@PathVariable long id, @Valid @RequestBody DepositRequest request) {
+        return walletService.deposit(id, request.amount());
     }
 }

@@ -1,5 +1,6 @@
 package com.vidien.ewallet.wallet;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -31,5 +32,27 @@ public class WalletRepository {
                 // optional() = "0 hoặc 1 dòng". Nhiều hơn 1 thì ném lỗi, đúng ý mình.
                 // Dùng single() thì 0 dòng cũng ném lỗi - không hợp cho việc tra cứu.
                 .optional();
+    }
+
+    /**
+     * Cong tien BANG SQL, khong doc so du ra Java roi cong roi ghi lai.
+     *
+     * <p>
+     * Doc-roi-ghi la "lost update": hai request song song cung doc duoc 100, cung ghi 150, nap
+     * hai lan ma chi vao mot lan. De database tu cong thi no khoa dong do trong luc UPDATE.
+     *
+     * <p>
+     * Tra ve so dong bi sua: 0 nghia la khong co vi nao mang id do.
+     */
+    public int addToBalance(long walletId, BigDecimal amount) {
+        return db.sql("""
+                UPDATE wallets
+                SET balance = balance + :amount,
+                    version = version + 1
+                WHERE id = :id
+                """)
+                .param("amount", amount)
+                .param("id", walletId)
+                .update();
     }
 }
