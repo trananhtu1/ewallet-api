@@ -9,7 +9,9 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.vidien.ewallet.auth.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.InvalidCredentialsException;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
@@ -202,5 +204,47 @@ public class GlobalExceptionHandler {
                                 "Email hoặc mật khẩu không đúng", request.getRequestURI());
 
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+        }
+
+        /**
+         * Duong dan khong ton tai. PHAI la 404, khong duoc de roi xuong handler Exception.
+         *
+         * <p>
+         * Do tren production truoc khi sua: MOI duong dan bia ra deu tra 500 INTERNAL_ERROR.
+         * Ba hau qua that:
+         * <ul>
+         * <li>5xx la nhom ma HTTP client va monitoring TU DONG THU LAI - bien mot cai go nham
+         * URL thanh nhieu request vo ich.
+         * <li>Moi lan bot quet lung tung la mot dong ERROR kem nguyen stack trace trong log.
+         * Log day rac thi luc co su co that se khong tim thay gi.
+         * <li>Frontend go sai duong dan se tuong server hong, di tim nham cho.
+         * </ul>
+         *
+         * <p>
+         * Nguyen nhan: handler @ExceptionHandler(Exception.class) o duoi la luoi chan cuoi, va
+         * no bat luon ca NoResourceFoundException. Luoi chan cuoi khong biet phan biet "loi cua
+         * server" voi "khach go sai dia chi" - phai noi ro cho no.
+         */
+        @ExceptionHandler(NoResourceFoundException.class)
+        public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException e,
+                        HttpServletRequest request) {
+                // DEBUG chu khong phai WARN: bot quet lung tung suot ngay, khong dang bao dong.
+                log.debug("Khong co duong dan {}", request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(404, "NOT_FOUND",
+                                "Không tìm thấy đường dẫn này", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+        }
+
+        /** Dung duong dan nhung sai dong tu (GET vao cho chi nhan POST). 405, khong phai 500. */
+        @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+        public ResponseEntity<ErrorResponse> handleMethodNotAllowed(
+                        HttpRequestMethodNotSupportedException e, HttpServletRequest request) {
+                ErrorResponse body = ErrorResponse.of(405, "METHOD_NOT_ALLOWED",
+                                "Phương thức " + e.getMethod() + " không dùng được ở đường dẫn này",
+                                request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(body);
         }
 }
