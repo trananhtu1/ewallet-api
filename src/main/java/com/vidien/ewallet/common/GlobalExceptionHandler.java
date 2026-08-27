@@ -10,6 +10,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.vidien.ewallet.auth.EmailAlreadyUsedException;
+import com.vidien.ewallet.auth.InvalidCredentialsException;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
 import com.vidien.ewallet.wallet.SameWalletTransferException;
 import com.vidien.ewallet.wallet.WalletNotFoundException;
@@ -171,5 +173,34 @@ public class GlobalExceptionHandler {
                                 "Ví nguồn và ví đích phải khác nhau", request.getRequestURI());
 
                 return ResponseEntity.badRequest().body(body);
+        }
+
+        /** Email da co nguoi dung. 409 CONFLICT: body dung, chi la trang thai he thong khong cho. */
+        @ExceptionHandler(EmailAlreadyUsedException.class)
+        public ResponseEntity<ErrorResponse> handleEmailTaken(EmailAlreadyUsedException e,
+                        HttpServletRequest request) {
+                ErrorResponse body = ErrorResponse.of(409, "EMAIL_ALREADY_USED",
+                                "Email này đã được đăng ký", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
+
+        /**
+         * Sai email hoac sai mat khau - MOT thong bao duy nhat cho ca hai.
+         *
+         * <p>
+         * Tach ra thanh "email khong ton tai" va "mat khau sai" la tang cho ke tan cong mot
+         * cong cu do xem email nao co that trong he thong (user enumeration). Log cung chi
+         * ghi email, khong bao gio ghi mat khau vua nhap.
+         */
+        @ExceptionHandler(InvalidCredentialsException.class)
+        public ResponseEntity<ErrorResponse> handleBadCredentials(InvalidCredentialsException e,
+                        HttpServletRequest request) {
+                log.warn("Dang nhap that bai tai {}", request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(401, "INVALID_CREDENTIALS",
+                                "Email hoặc mật khẩu không đúng", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
         }
 }

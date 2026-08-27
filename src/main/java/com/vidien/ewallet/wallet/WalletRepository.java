@@ -95,4 +95,24 @@ public class WalletRepository {
                 .param("id", walletId)
                 .update();
     }
+
+    /** Tao vi cho mot nguoi dung moi. So du bat dau tu 0. */
+    public long insertForUser(long userId) {
+        return db.sql("""
+                INSERT INTO wallets (user_id, balance)
+                VALUES (:userId, 0)
+                RETURNING id
+                """)
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+    }
+
+    /** Moi nguoi dung dung MOT vi - rang buoc UNIQUE tren user_id o V1 bao dam dieu do. */
+    public Optional<Long> findByUserId(long userId) {
+        return db.sql("SELECT id FROM wallets WHERE user_id = :userId")
+                .param("userId", userId)
+                .query(Long.class)
+                .optional();
+    }
 }

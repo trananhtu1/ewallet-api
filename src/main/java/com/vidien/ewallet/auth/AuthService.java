@@ -1,0 +1,107 @@
+package com.vidien.ewallet.auth;
+
+import java.time.Duration;
+import java.time.Instant;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.vidien.ewallet.user.User;
+import com.vidien.ewallet.user.UserRepository;
+import com.vidien.ewallet.wallet.WalletRepository;
+
+@Service
+public class AuthService {
+
+    private final UserRepository users;
+    private final WalletRepository wallets;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtEncoder jwtEncoder;
+    private final Duration tokenTtl;
+
+    public AuthService(UserRepository users, WalletRepository wallets,
+            PasswordEncoder passwordEncoder, JwtEncoder jwtEncoder,
+            @Value("${app.jwt.ttl:PT2H}") Duration tokenTtl) {
+        this.users = users;
+        this.wallets = wallets;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtEncoder = jwtEncoder;
+        this.tokenTtl = tokenTtl;
+    }
+
+    /**
+     * Dang ky = tao NGUOI DUNG va tao VI, hai lenh ghi, mot transaction.
+     *
+     * <p>
+     * Neu tao user xong ma tao vi hong thi he thong co mot nguoi dang nhap duoc nhung khong
+     * co vi - moi endpoint tien bac deu 404 va khong ai hieu vi sao. @Transactional lam ca
+     * hai cung song hoac cung chet, dung nhu bai nap tien.
+     */
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+        // Kiem truoc de tra loi tu te. Nhung KHONG dua vao mot minh no: giua luc kiem va luc
+        // ghi van co khe ho cho hai request dang ky cung email cung luc. Bit khe ho do la
+        // unique index ux_users_email_lower o V1 - no la thu quyet dinh cuoi cung.
+        if (users.findByEmail(request.email()).isPresent()) {
+            throw new EmailAlreadyUsedException(request.email());
+        }
+
+        String hash = passwordEncoder.encode(request.password());
+        long userId = users.insert(request.email(), hash, request.fullName());
+        long walletId = wallets.insertForUser(userId);
+
+        return issueToken(userId, request.email(), request.fullName(), walletId);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request) {
+        User user = users.findByEmail(request.email())
+                .orElseThrow(InvalidCredentialsException::new);
+
+        // matches() doc salt tu chinh cai hash roi bam lai mat khau vua nhap de so.
+        // KHONG BAO GIO dung equals() - bam cung mot mat khau hai lan ra hai chuoi khac nhau.
+        if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
+            throw new InvalidCredentialsException();
+        }
+
+        long walletId = wallets.findByUserId(user.id())
+                .orElseThrow(InvalidCredentialsException::new);
+
+        return issueToken(user.id(), user.email(), user.fullName(), walletId);
+    }
+
+    /**
+     * Token KHONG duoc ma hoa, chi duoc KY.
+     *
+     * <p>
+     * Bat cu ai cam token deu doc duoc phan claims - dan vao jwt.io la thay. Chu ky chi bao
+     * dam khong ai SUA duoc noi dung, khong bao dam noi dung bi mat. Nen trong nay chi de
+     * nhung thu khong ngai lo: id, email, ten. Khong bao gio de mat khau hay so du.
+     */
+    private AuthResponse issueToken(long userId, String email, String fullName, long walletId) {
+        Instant now = Instant.now();
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("ewallet-api")
+                .issuedAt(now)
+                .expiresAt(now.plus(tokenTtl))
+                // subject la "token nay noi ve AI". Dung id chu khong dung email: email co
+                // the doi, id thi khong.
+                .subject(String.valueOf(userId))
+                .claim("email", email)
+                .claim("walletId", walletId)
+                .build();
+
+        String token = jwtEncoder
+                .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),
+                        claims))
+                .getTokenValue();
+
+        return new AuthResponse(token, tokenTtl.toSeconds(), walletId, fullName);
+    }
+}

@@ -44,6 +44,22 @@
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
+		<!-- Spring Security: BCrypt de bam mat khau, va bo loc dung truoc moi request.
+		     LUU Y: chi can co dependency nay tren classpath la Spring KHOA HET moi endpoint
+		     va in ra mot mat khau ngau nhien luc khoi dong. Phai co SecurityConfig moi chay
+		     tiep duoc - xem com/vidien/ewallet/config/SecurityConfig.java -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- Keo theo Nimbus: JwtEncoder de PHAT token, JwtDecoder de KIEM token.
+		     Khong dung jjwt vi spring-boot-dependencies khong quan version cua no,
+		     con cai nay thi co - bot mot chuoi so phai tu theo doi. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

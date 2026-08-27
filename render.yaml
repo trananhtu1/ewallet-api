@@ -46,6 +46,16 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
+      # Khoa ky JWT. sync: false = Blueprint KHONG mang gia tri theo, phai tu dat
+      # trong Render Dashboard -> Environment. Khoa ky ma nam trong git thi ai
+      # clone repo cung phat duoc token hop le.
+      #
+      # Sinh khoa: openssl rand -base64 48   (HS256 doi it nhat 32 ky tu)
+      # Thieu bien nay -> app chet ngay luc khoi dong voi
+      # "Could not resolve placeholder 'JWT_SECRET'", va Render giu ban CU dang chay.
+      - key: JWT_SECRET
+        sync: false
+
 # KHÔNG khai báo database ở đây. Database của Render HẾT HẠN SAU 30 NGÀY -
 # deploy 23/08 thì nó chết khoảng 22/09, đúng lúc bắt đầu rải CV.
 # Dùng Neon (500MB, không hết hạn) và truyền vào qua SPRING_DATASOURCE_URL.
