@@ -3,7 +3,9 @@ package com.vidien.ewallet.wallet;
 import java.math.BigDecimal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import com.vidien.ewallet.transaction.TransactionRepository;
+import com.vidien.ewallet.transaction.TransactionView;
 
 /**
  * Tang nghiep vu, va la noi dat ranh gioi transaction.
@@ -65,5 +67,24 @@ public class WalletService {
 
         return wallets.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
+    }
+
+    /**
+     * Lich su giao dich cua mot vi.
+     *
+     * <p>
+     * Kiem vi ton tai TRUOC: khong co buoc nay thi vi khong ton tai se tra ve mang rong 200,
+     * y het mot vi that su chua co giao dich nao. Hai chuyen khac han nhau ma client khong
+     * phan biet duoc.
+     */
+    @Transactional(readOnly = true)
+    public List<TransactionView> history(long walletId, int limit) {
+        if (wallets.findById(walletId).isEmpty()) {
+            throw new WalletNotFoundException(walletId);
+        }
+
+        return transactions.findByWalletId(walletId, limit).stream()
+                .map(tx -> TransactionView.of(tx, walletId))
+                .toList();
     }
 }

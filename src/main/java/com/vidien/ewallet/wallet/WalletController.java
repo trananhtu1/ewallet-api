@@ -6,6 +6,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
+import org.springframework.web.bind.annotation.RequestParam;
+import com.vidien.ewallet.transaction.TransactionView;
 import jakarta.validation.Valid;
 
 /**
@@ -43,5 +46,19 @@ public class WalletController {
     @PostMapping("/{id}/deposits")
     public Wallet deposit(@PathVariable long id, @Valid @RequestBody DepositRequest request) {
         return walletService.deposit(id, request.amount());
+    }
+
+    /**
+     * GET /{id}/transactions?limit=20
+     *
+     * <p>
+     * limit co MAC DINH va co TRAN. Khong co tran thi mot nguoi go limit=1000000 la keo het
+     * bang ve, giet ca server lan trinh duyet. Math.min la mot dong, va no la dong duy nhat
+     * dung giua API cong khai va mot cau query khong gioi han.
+     */
+    @GetMapping("/{id}/transactions")
+    public List<TransactionView> history(@PathVariable long id,
+            @RequestParam(defaultValue = "20") int limit) {
+        return walletService.history(id, Math.min(Math.max(limit, 1), 100));
     }
 }
