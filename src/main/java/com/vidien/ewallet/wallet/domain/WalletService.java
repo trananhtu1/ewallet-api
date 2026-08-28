@@ -5,7 +5,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import com.vidien.ewallet.transaction.infra.TransactionRepository;
-import com.vidien.ewallet.transaction.domain.TransactionView;
+import com.vidien.ewallet.transaction.domain.Transaction;
+import com.vidien.ewallet.transaction.domain.TransactionStatus;
+import com.vidien.ewallet.transaction.domain.TransactionType;
+import com.vidien.ewallet.transaction.api.dto.TransactionView;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
 import com.vidien.ewallet.wallet.infra.WalletRepository;
 
@@ -59,6 +62,22 @@ public class WalletService {
      * phep mot nguoi nhieu vi thi cho nay phai doi thanh cau hoi "vi nay co thuoc ve userId
      * khong" - va no la mot cau truy van, khong con la mot phep so sanh.
      */
+    /**
+     * Tao vi cho mot nguoi dung vua dang ky. So du bat dau tu 0.
+     *
+     * <p>
+     * Dung {@code save()} chu khong phai native INSERT: JPA tra ve luon doi tuong da co id,
+     * khong phai di mot vong SELECT nua. {@code version} do {@code @Version} tu dat, con
+     * {@code created_at} do DEFAULT cua database - nen o day chi phai dien dung hai truong.
+     */
+    @Transactional
+    public Wallet createForUser(long userId) {
+        return wallets.save(Wallet.builder()
+                .userId(userId)
+                .balance(BigDecimal.ZERO)
+                .build());
+    }
+
     private void requireOwn(long walletId, long callerWalletId) {
         if (walletId != callerWalletId) {
             throw new WalletNotFoundException(walletId);
@@ -99,7 +118,13 @@ public class WalletService {
             throw new WalletNotFoundException(walletId);
         }
 
-        transactions.insertDeposit(walletId, amount);
+        transactions.save(Transaction.builder()
+                .fromWalletId(null)   // nap tien khong co vi nguon - tien tu ngoai he thong vao
+                .toWalletId(walletId)
+                .amount(amount)
+                .type(TransactionType.DEPOSIT)
+                .status(TransactionStatus.SUCCESS)
+                .build());
 
         return wallets.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));

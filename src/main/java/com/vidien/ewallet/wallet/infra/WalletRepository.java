@@ -2,150 +2,126 @@ package com.vidien.ewallet.wallet.infra;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import com.vidien.ewallet.transfer.domain.FailedTransferRecorder;
 import com.vidien.ewallet.wallet.domain.Wallet;
 
 /**
- * Tầng duy nhất được phép biết SQL. Controller và service không bao giờ thấy chữ SELECT nào.
+ * ⭐ File nay la cho ro nhat cua ca dot doi sang JPA: <b>cai gi de JPA lo, cai gi phai tu viet
+ * SQL, va vi sao.</b>
  *
  * <p>
- * JdbcClient là API mới (Spring 6.1+), gọn hơn JdbcTemplate nhưng chạy trên chính nó. Nói "dùng
- * JdbcTemplate" lúc phỏng vấn vẫn đúng.
+ * Ba method dau la JPA thuan - {@code findById} tu {@code JpaRepository}, khong viet dong nao.
+ * Ba method sau la <b>native query</b>, va moi cai deu co mot ly do da DO DUOC chu khong phai
+ * so thich:
+ *
+ * <ul>
+ * <li>{@code lockById} - JPA khong phoi ra muc khoa {@code FOR NO KEY UPDATE}
+ * <li>{@code addToBalance} / {@code subtractFromBalance} - dieu kien phai nam TRONG cau UPDATE
+ * </ul>
  */
 @Repository
-public class WalletRepository {
-    private final JdbcClient db;
+public interface WalletRepository extends JpaRepository<Wallet, Long> {
 
-    public WalletRepository(JdbcClient db) {
-        this.db = db;
-    }
+    /** Moi nguoi dung dung MOT vi - rang buoc UNIQUE tren user_id o V1 bao dam dieu do. */
+    Optional<Wallet> findByUserId(Long userId);
 
-    public Optional<Wallet> findById(long id) {
-        return db.sql("""
-                SELECT id, user_id, balance, version, created_at
-                FROM wallets
-                WHERE id = :id
-                """)
-                // :id là THAM SỐ, không phải nối chuỗi. Đây là thứ chặn SQL injection:
-                // giá trị đi đường riêng, database không bao giờ đọc nó như là câu lệnh.
-                .param("id", id).query(Wallet.class)
-                // optional() = "0 hoặc 1 dòng". Nhiều hơn 1 thì ném lỗi, đúng ý mình.
-                // Dùng single() thì 0 dòng cũng ném lỗi - không hợp cho việc tra cứu.
-                .optional();
-    }
+    /**
+     * ⭐⭐ VI SAO KHONG DUNG {@code @Lock(LockModeType.PESSIMISTIC_WRITE)} CUA JPA.
+     *
+     * <p>
+     * Annotation do sinh ra {@code FOR UPDATE}. Va {@code FOR UPDATE} <b>xung dot voi
+     * {@code FOR KEY SHARE}</b> - muc khoa Postgres tu lay khi kiem khoa ngoai luc INSERT mot
+     * dong moi.
+     *
+     * <p>
+     * Ma giua transaction chuyen tien co dung mot lenh INSERT nhu vay: dong so cai
+     * {@code status = 'FAILED'} duoc ghi bang {@code REQUIRES_NEW}, va no co khoa ngoai tro
+     * vao chinh hai cai vi dang bi khoa. Do that hom 28/08:
+     *
+     * <pre>
+     * FOR UPDATE         -> HTTP 500 sau 5.74 giay, SQLSTATE 55P03 lock timeout
+     * FOR NO KEY UPDATE  -> HTTP 409 sau 0.457 giay
+     * </pre>
+     *
+     * Va Postgres <b>khong goi do la deadlock</b>: transaction ngoai khong cho mot khoa nao,
+     * no cho mot loi goi Java - vong cho khong khep kin trong database nen
+     * {@code deadlock_timeout} mu hoan toan.
+     *
+     * <p>
+     * {@code FOR NO KEY UPDATE} khong xung dot voi {@code FOR KEY SHARE} nen INSERT di qua, ma
+     * <b>van xung dot voi chinh no</b> - hai lenh chuyen tien song song van xep hang. Da kiem
+     * ca hai ve.
+     *
+     * <p>
+     * 📌 Cau tra loi phong van: <i>"em dung JPA cho gan het, tru dung mot cho can mot muc khoa
+     * JPA khong phoi ra."</i>
+     *
+     * <p>
+     * ⚠️ Phai goi theo THU TU ID TANG DAN khi khoa nhieu vi. Hai lenh nguoc chieu (1→2 va 2→1)
+     * chay cung luc, moi ben khoa mot vi roi cho ben kia = deadlock that su. Khoa theo thu tu
+     * co dinh thi tinh huong do khong ton tai.
+     */
+    @Query(value = "SELECT id FROM wallets WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<Long> lockById(@Param("id") long id);
 
     /**
      * Cong tien BANG SQL, khong doc so du ra Java roi cong roi ghi lai.
      *
      * <p>
-     * Doc-roi-ghi la "lost update": hai request song song cung doc duoc 100, cung ghi 150, nap
+     * Doc-roi-ghi la "lost update": hai request song song cung doc duoc 100, cung ghi 150 - nap
      * hai lan ma chi vao mot lan. De database tu cong thi no khoa dong do trong luc UPDATE.
+     *
+     * <p>
+     * ⚠️ {@code clearAutomatically = true}: cau UPDATE nay di THANG xuong database, khong qua
+     * persistence context. Neu context dang giu mot ban sao cua dong vi do thi ban sao ay gio
+     * CU - doc lai trong cung transaction se ra so du truoc khi cong. Va vi {@code version} bi
+     * tang o day ma Hibernate khong biet, lan flush sau se nem OptimisticLockException cho mot
+     * dung do khong he ton tai.
+     *
+     * <p>
+     * {@code flushAutomatically = true}: day het thay doi dang cho xuong database TRUOC khi
+     * chay cau nay, neu khong thi thu tu ghi that co the khac thu tu trong code.
      *
      * <p>
      * Tra ve so dong bi sua: 0 nghia la khong co vi nao mang id do.
      */
-    public int addToBalance(long walletId, BigDecimal amount) {
-        return db.sql("""
-                UPDATE wallets
-                SET balance = balance + :amount,
-                    version = version + 1
-                WHERE id = :id
-                """)
-                .param("amount", amount)
-                .param("id", walletId)
-                .update();
-    }
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE wallets
+            SET balance = balance + :amount,
+                version = version + 1
+            WHERE id = :id
+            """, nativeQuery = true)
+    int addToBalance(@Param("id") long walletId, @Param("amount") BigDecimal amount);
 
     /**
-     * Khoa mot dong vi lai cho toi khi transaction ket thuc (SELECT ... FOR UPDATE).
-     *
-     * <p>
-     * Bat cu transaction nao khac dong vao chinh dong nay se phai DUNG CHO. Nho vay doan
-     * doc-so-du-roi-quyet-dinh o tang service moi an toan: khong ai chen ngang duoc o giua.
-     *
-     * <p>
-     * QUAN TRONG - phai goi theo THU TU ID TANG DAN khi khoa nhieu vi. Hai lenh chuyen tien
-     * nguoc chieu nhau (1->2 va 2->1) chay cung luc, moi ben khoa mot vi roi cho ben kia, se
-     * deadlock. Postgres phat hien duoc va giet mot ben, nhung nguoi dung ben do an loi 500
-     * ma khong hieu vi sao. Khoa theo thu tu co dinh thi tinh huong do khong ton tai.
-     *
-     * <p>
-     * ⭐ FOR NO KEY UPDATE chu KHONG phai FOR UPDATE - mot tu, va thieu no thi treo ca request.
-     *
-     * <p>
-     * Postgres co bon muc khoa DONG. Bang xung dot cua chung:
-     *
-     * <pre>
-     *                        | KEY SHARE | SHARE | NO KEY UPDATE | UPDATE
-     *   FOR KEY SHARE        |     -     |   -   |       -       |   X
-     *   FOR NO KEY UPDATE    |     -     |   X   |       X       |   X
-     *   FOR UPDATE           |     X     |   X   |       X       |   X
-     * </pre>
-     *
-     * Cho dat: khi INSERT mot dong co KHOA NGOAI, Postgres phai kiem dong cha con song khong,
-     * va no lam viec do bang cach lay khoa <b>FOR KEY SHARE</b> tren dong cha. Nhin bang tren:
-     * FOR KEY SHARE xung dot voi dung MOT muc, va do la FOR UPDATE.
-     *
-     * <p>
-     * Nen ban cu (FOR UPDATE) chan luon chinh minh: transaction ngoai khoa hai dong vi, roi
-     * goi FailedTransferRecorder ghi mot dong so cai co khoa ngoai tro vao hai dong do. Lenh
-     * INSERT phai doi, ma nguoi giu khoa lai la ke dang doi no. Do that tren app that:
-     * <b>HTTP 500 sau 5.74 giay</b>, SQLSTATE 55P03 - va 5.74s do la vi co lock_timeout, khong
-     * co thi treo vinh vien. Postgres KHONG bao deadlock, vi transaction ngoai khong cho mot
-     * khoa nao ca - no cho mot loi goi Java.
-     *
-     * <p>
-     * FOR NO KEY UPDATE khong xung dot voi FOR KEY SHARE nen lenh INSERT di qua. Va no
-     * <b>khong mat mot chut an toan nao</b>: hai lenh FOR NO KEY UPDATE tren cung mot dong VAN
-     * chan nhau (do that: 55P03), nen hai lenh chuyen tien song song van xep hang dung nhu cu.
-     * Cai duy nhat no cho qua la viec kiem khoa ngoai - thu chi doc chu khong sua dong vi.
-     */
-    public void lockById(long walletId) {
-        db.sql("SELECT id FROM wallets WHERE id = :id FOR NO KEY UPDATE")
-                .param("id", walletId)
-                .query(Long.class)
-                .optional();
-    }
-
-    /**
-     * Tru tien. Dieu kien balance >= :amount nam NGAY TRONG cau UPDATE, khong phai kiem o Java.
+     * Tru tien. Dieu kien {@code balance >= :amount} nam NGAY TRONG cau UPDATE, khong phai kiem
+     * o Java.
      *
      * <p>
      * Tra ve 0 khi: khong co vi nao id do, HOAC so du khong du. Tang service da khoa dong tu
      * truoc nen phan biet duoc hai truong hop, nhung dieu kien nay van giu lai lam lop chan
      * thu hai - va no la thu duy nhat con dung neu mai kia co ai goi thang repository.
+     *
+     * <p>
+     * 📌 Day cung la ly do khong dung {@code @Version} cho duong nay: optimistic locking bao
+     * "co ai vua sua khong", con dieu kien nay bao "co du tien khong" - hai cau hoi khac nhau,
+     * va cau thu hai moi la cau ve tien.
      */
-    public int subtractFromBalance(long walletId, BigDecimal amount) {
-        return db.sql("""
-                UPDATE wallets
-                SET balance = balance - :amount,
-                    version = version + 1
-                WHERE id = :id AND balance >= :amount
-                """)
-                .param("amount", amount)
-                .param("id", walletId)
-                .update();
-    }
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE wallets
+            SET balance = balance - :amount,
+                version = version + 1
+            WHERE id = :id AND balance >= :amount
+            """, nativeQuery = true)
+    int subtractFromBalance(@Param("id") long walletId, @Param("amount") BigDecimal amount);
 
-    /** Tao vi cho mot nguoi dung moi. So du bat dau tu 0. */
-    public long insertForUser(long userId) {
-        return db.sql("""
-                INSERT INTO wallets (user_id, balance)
-                VALUES (:userId, 0)
-                RETURNING id
-                """)
-                .param("userId", userId)
-                .query(Long.class)
-                .single();
-    }
-
-    /** Moi nguoi dung dung MOT vi - rang buoc UNIQUE tren user_id o V1 bao dam dieu do. */
-    public Optional<Long> findByUserId(long userId) {
-        return db.sql("SELECT id FROM wallets WHERE user_id = :userId")
-                .param("userId", userId)
-                .query(Long.class)
-                .optional();
-    }
+    // Tao vi moi thi dung save() cua JpaRepository - xem WalletService.createForUser().
+    // Khong viet native INSERT ... RETURNING o day: @Modifying chi tra ve SO DONG bi sua,
+    // khong lay duoc id vua sinh, va di duong vong de lay lai thi dai hon save().
 }

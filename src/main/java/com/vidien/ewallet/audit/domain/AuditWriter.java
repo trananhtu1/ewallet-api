@@ -13,8 +13,8 @@ import com.vidien.ewallet.audit.infra.AuditLogRepository;
  * ⭐ VI SAO TACH KHOI Auditor - va day la mot cai bay tinh vi hon ca bay self-invocation:
  *
  * <p>
- * Ban dau viet try/catch NGAY TRONG method co @Transactional(REQUIRES_NEW). Doc thi hop ly:
- * "ghi hong thi bo qua". Nhung khong chay duoc, va ly do nam o thu tu:
+ * Ban dau viet try/catch NGAY TRONG method co {@code @Transactional(REQUIRES_NEW)}. Doc thi
+ * hop ly. Nhung khong chay duoc, va ly do nam o thu tu:
  *
  * <pre>
  *   proxy mo transaction
@@ -27,9 +27,8 @@ import com.vidien.ewallet.audit.infra.AuditLogRepository;
  * Bat loi thi phai bat NGOAI ranh gioi transaction, tuc la o mot bean khac goi vao day.
  *
  * <p>
- * 📌 Luat rut ra: <b>try/catch dat trong mot method @Transactional khong cuu duoc loi cua
- * DATABASE.</b> No cuu duoc loi logic cua minh, con loi lam hong transaction thi phai bat
- * o ben ngoai - vi thu vo la lenh COMMIT, ma COMMIT thi nam ngoai than method.
+ * 📌 Luat: <b>try/catch dat trong mot method @Transactional khong cuu duoc loi cua DATABASE.</b>
+ * Thu vo la lenh COMMIT, ma COMMIT thi nam ngoai than method.
  */
 @Service
 public class AuditWriter {
@@ -42,6 +41,10 @@ public class AuditWriter {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void write(AuditEvent event, Long actorId, Map<String, Object> payload) {
-        auditLog.insert(event, actorId, payload);
+        auditLog.save(AuditLog.builder()
+                .event(event)
+                .actorId(actorId)
+                .payload(payload)
+                .build());
     }
 }

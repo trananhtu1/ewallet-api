@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.vidien.ewallet.audit.domain.AuditEvent;
 import com.vidien.ewallet.audit.domain.Auditor;
 import com.vidien.ewallet.transaction.domain.Transaction;
+import com.vidien.ewallet.transaction.domain.TransactionStatus;
+import com.vidien.ewallet.transaction.domain.TransactionType;
 import com.vidien.ewallet.transaction.infra.TransactionRepository;
 import com.vidien.ewallet.wallet.domain.exception.InsufficientFundsException;
 import com.vidien.ewallet.wallet.domain.exception.NotYourWalletException;
@@ -104,7 +106,7 @@ public class TransferService {
         // kiem nay di.
         if (idempotencyKey != null) {
             Optional<Transaction> daLam =
-                    transactions.findByIdempotencyKey(fromWalletId, idempotencyKey);
+                    transactions.findByFromWalletIdAndIdempotencyKey(fromWalletId, idempotencyKey);
             if (daLam.isPresent()) {
                 log.info("Bo qua lenh chuyen tien lap: vi {} da dung khoa {}", fromWalletId,
                         idempotencyKey);
@@ -114,7 +116,7 @@ public class TransferService {
             }
         }
 
-        if (from.balance().compareTo(amount) < 0) {
+        if (from.getBalance().compareTo(amount) < 0) {
             // Ghi vet vao so cai TRUOC khi nem. Goi qua mot BEAN KHAC chu khong phai
             // this.something() - neu khong, @Transactional(REQUIRES_NEW) khong ai doc va
             // dong nay bien mat cung transaction dang bi rollback. Da do: 0 dong.
@@ -132,19 +134,26 @@ public class TransferService {
             audit.record(AuditEvent.TRANSFER_REJECTED, callerWalletId,
                     Map.of("from", fromWalletId, "to", toWalletId, "amount", amount.toString(),
                             "reason", "INSUFFICIENT_FUNDS",
-                            "balanceAtTime", from.balance().toString()));
+                            "balanceAtTime", from.getBalance().toString()));
 
-            throw new InsufficientFundsException(fromWalletId, from.balance(), amount);
+            throw new InsufficientFundsException(fromWalletId, from.getBalance(), amount);
         }
 
         // Dieu kien balance >= :amount van nam trong cau UPDATE - lop chan thu hai.
         int subtracted = wallets.subtractFromBalance(fromWalletId, amount);
         if (subtracted == 0) {
-            throw new InsufficientFundsException(fromWalletId, from.balance(), amount);
+            throw new InsufficientFundsException(fromWalletId, from.getBalance(), amount);
         }
-        wallets.addToBalance(to.id(), amount);
+        wallets.addToBalance(to.getId(), amount);
 
-        transactions.insertTransfer(fromWalletId, toWalletId, amount, idempotencyKey);
+        transactions.save(Transaction.builder()
+                .fromWalletId(fromWalletId)
+                .toWalletId(toWalletId)
+                .amount(amount)
+                .type(TransactionType.TRANSFER)
+                .status(TransactionStatus.SUCCESS)
+                .idempotencyKey(idempotencyKey)
+                .build());
 
         log.info("Chuyen {} tu vi {} sang vi {}", amount, fromWalletId, toWalletId);
 
