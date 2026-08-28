@@ -30,16 +30,19 @@ public class AuthService {
     private final JwtEncoder jwtEncoder;
     private final Duration tokenTtl;
     private final Auditor audit;
+    private final RefreshTokenService refreshTokens;
 
     public AuthService(UserRepository users, WalletRepository wallets,
             PasswordEncoder passwordEncoder, JwtEncoder jwtEncoder,
-            @Value("${app.jwt.ttl:PT2H}") Duration tokenTtl, Auditor audit) {
+            @Value("${app.jwt.ttl:PT15M}") Duration tokenTtl, Auditor audit,
+            RefreshTokenService refreshTokens) {
         this.users = users;
         this.wallets = wallets;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.tokenTtl = tokenTtl;
         this.audit = audit;
+        this.refreshTokens = refreshTokens;
     }
 
     /**
@@ -69,7 +72,26 @@ public class AuthService {
         return issueToken(userId, request.email(), request.fullName(), walletId);
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * ⚠️ KHONG con readOnly = true. Truoc PR nay dang nhap chi DOC (tim user, tim vi) nen
+     * readOnly la dung. Gio no phat mot refresh token, tuc la GHI mot dong vao database.
+     *
+     * <p>
+     * Da do khi quen doi: {@code PSQLException: cannot execute INSERT in a read-only transaction}.
+     *
+     * <p>
+     * 📌 Va cho dang hoc nam o day: {@code RefreshTokenService.issueNewFamily} CO
+     * {@code @Transactional} rieng, khong readOnly - nhung no <b>khong cuu duoc</b>. Propagation
+     * mac dinh la REQUIRED, nghia la "co transaction roi thi GIA NHAP", va transaction dang co
+     * la read-only. Co readOnly la thuoc tinh cua transaction, khong phai cua method - method
+     * ben trong khong the go no ra.
+     *
+     * <p>
+     * Muon go that thi phai REQUIRES_NEW, tuc la mo han mot transaction khac - va luc do dong
+     * refresh token se commit doc lap voi phan con lai, tuc la mat tinh "tat ca hoac khong gi
+     * ca". Sua o dung cho: bo readOnly khoi method nay, vi no da that su ghi.
+     */
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         Optional<User> found = users.findByEmail(request.email());
 
@@ -105,14 +127,48 @@ public class AuthService {
     }
 
     /**
-     * Token KHONG duoc ma hoa, chi duoc KY.
+     * Doi refresh token lay mot cap token moi.
+     *
+     * <p>
+     * Khong doi mat khau, khong doi access token cu. Nguoi goi chi can chung minh dang cam
+     * mot refresh token con dung duoc - va no bi <b>xoay vong</b>: cai vua dung chet ngay,
+     * client nhan cai moi. Chi tiet va ly do o RefreshTokenService.rotate().
+     */
+    @Transactional
+    public AuthResponse refresh(String refreshToken) {
+        RefreshTokenService.Rotated rotated = refreshTokens.rotate(refreshToken);
+
+        User user = users.findById(rotated.userId())
+                .orElseThrow(InvalidRefreshTokenException::new);
+        long walletId = wallets.findByUserId(user.id())
+                .orElseThrow(InvalidRefreshTokenException::new);
+
+        // fullName de null: client da co roi tu luc dang nhap. @JsonInclude(NON_NULL) tren
+        // AuthResponse loai no khoi JSON.
+        return buildResponse(user.id(), user.email(), null, walletId, rotated.refreshToken());
+    }
+
+    /** Dang xuat THAT SU: thu hoi moi refresh token. Access token cu song not TTL 15 phut. */
+    @Transactional
+    public int logout(long userId) {
+        return refreshTokens.revokeAllForUser(userId);
+    }
+
+    private AuthResponse issueToken(long userId, String email, String fullName, long walletId) {
+        return buildResponse(userId, email, fullName, walletId,
+                refreshTokens.issueNewFamily(userId));
+    }
+
+    /**
+     * Access token KHONG duoc ma hoa, chi duoc KY.
      *
      * <p>
      * Bat cu ai cam token deu doc duoc phan claims - dan vao jwt.io la thay. Chu ky chi bao
      * dam khong ai SUA duoc noi dung, khong bao dam noi dung bi mat. Nen trong nay chi de
      * nhung thu khong ngai lo: id, email, ten. Khong bao gio de mat khau hay so du.
      */
-    private AuthResponse issueToken(long userId, String email, String fullName, long walletId) {
+    private AuthResponse buildResponse(long userId, String email, String fullName, long walletId,
+            String refreshToken) {
         Instant now = Instant.now();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -138,6 +194,6 @@ public class AuthService {
                         claims))
                 .getTokenValue();
 
-        return new AuthResponse(token, tokenTtl.toSeconds(), walletId, fullName);
+        return new AuthResponse(token, refreshToken, tokenTtl.toSeconds(), walletId, fullName);
     }
 }
