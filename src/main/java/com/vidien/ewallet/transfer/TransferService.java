@@ -1,11 +1,12 @@
 package com.vidien.ewallet.transfer;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.vidien.ewallet.transaction.Transaction;
 import com.vidien.ewallet.transaction.TransactionRepository;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
 import com.vidien.ewallet.wallet.NotYourWalletException;
@@ -35,7 +36,7 @@ public class TransferService {
 
     @Transactional
     public Wallet transfer(long fromWalletId, long toWalletId, BigDecimal amount,
-            long callerWalletId) {
+            long callerWalletId, String idempotencyKey) {
         // ⭐ CHO BIT LO BOLA, va day la ca thuan nhat cua no: vi NGUON den tu BODY.
         // Khong co dong nay thi bat ky ai dang ky xong deu goi duoc
         //     POST /api/transfers {"fromWalletId": 1, "toWalletId": <vi cua toi>, ...}
@@ -75,6 +76,29 @@ public class TransferService {
         Wallet to = wallets.findById(toWalletId)
                 .orElseThrow(() -> new WalletNotFoundException(toWalletId));
 
+        // Kiem khoa chong lap SAU khi da khoa hai dong vi, khong phai truoc.
+        //
+        // Neu kiem truoc khi khoa thi giua luc kiem va luc ghi van co khe ho: hai request
+        // cung khoa, ca hai deu thay "chua co", ca hai cung chuyen. Kiem sau khi khoa thi
+        // request thu hai bi CHAN o lockById cho toi khi request thu nhat commit xong, luc
+        // do no moi doc - va doc thay dong vua ghi.
+        //
+        // Unique index ux_transactions_wallet_idempotency van giu lai lam hang rao cuoi,
+        // cho truong hop hai request khoa HAI vi nguon khac nhau (khong the xay ra voi cung
+        // mot khoa vi khoa gan lien voi vi nguon) - va cho truong hop mai kia co ai bo dong
+        // kiem nay di.
+        if (idempotencyKey != null) {
+            Optional<Transaction> daLam =
+                    transactions.findByIdempotencyKey(fromWalletId, idempotencyKey);
+            if (daLam.isPresent()) {
+                log.info("Bo qua lenh chuyen tien lap: vi {} da dung khoa {}", fromWalletId,
+                        idempotencyKey);
+                // Tra ve so du HIEN TAI chu khong phai so du luc do. Nguoi goi hoi
+                // "lenh cua toi da chay chua" chu khong hoi "luc do so du bao nhieu".
+                return from;
+            }
+        }
+
         if (from.balance().compareTo(amount) < 0) {
             // Ghi vet vao so cai TRUOC khi nem. Goi qua mot BEAN KHAC chu khong phai
             // this.something() - neu khong, @Transactional(REQUIRES_NEW) khong ai doc va
@@ -97,7 +121,7 @@ public class TransferService {
         }
         wallets.addToBalance(to.id(), amount);
 
-        transactions.insertTransfer(fromWalletId, toWalletId, amount);
+        transactions.insertTransfer(fromWalletId, toWalletId, amount, idempotencyKey);
 
         log.info("Chuyen {} tu vi {} sang vi {}", amount, fromWalletId, toWalletId);
 

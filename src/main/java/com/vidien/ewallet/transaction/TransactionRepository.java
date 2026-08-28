@@ -2,6 +2,7 @@ package com.vidien.ewallet.transaction;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -44,15 +45,40 @@ public class TransactionRepository {
      * se bien mat cung. Muon giu lai phai dung transaction rieng (propagation REQUIRES_NEW).
      * Ghi lai lam mon no, chua lam.
      */
-    public void insertTransfer(long fromWalletId, long toWalletId, BigDecimal amount) {
+    public void insertTransfer(long fromWalletId, long toWalletId, BigDecimal amount,
+            String idempotencyKey) {
         db.sql("""
-                INSERT INTO transactions (from_wallet_id, to_wallet_id, amount, type, status)
-                VALUES (:fromWalletId, :toWalletId, :amount, 'TRANSFER', 'SUCCESS')
+                INSERT INTO transactions
+                    (from_wallet_id, to_wallet_id, amount, type, status, idempotency_key)
+                VALUES (:fromWalletId, :toWalletId, :amount, 'TRANSFER', 'SUCCESS', :key)
                 """)
                 .param("fromWalletId", fromWalletId)
                 .param("toWalletId", toWalletId)
                 .param("amount", amount)
+                // null khi nguoi goi khong gui khoa. Unique index van cho NHIEU dong cung
+                // (vi, NULL) vi theo chuan SQL, NULL = NULL khong phai TRUE.
+                .param("key", idempotencyKey)
                 .update();
+    }
+
+    /**
+     * Tim mot lan chuyen tien da ghi bang khoa chong lap.
+     *
+     * <p>
+     * Pham vi tim la (VI NGUON, khoa) chu khong phai mot minh khoa - xem V2. Khoa do NGUOI
+     * GOI tu sinh, nen hai nguoi dung khac nhau rat co the cung go "transfer-1"; neu tim
+     * theo mot minh khoa thi nguoi thu hai se nhan duoc ket qua giao dich CUA NGUOI KHAC.
+     */
+    public Optional<Transaction> findByIdempotencyKey(long fromWalletId, String key) {
+        return db.sql("""
+                SELECT id, from_wallet_id, to_wallet_id, amount, type, status, created_at
+                FROM transactions
+                WHERE from_wallet_id = :fromWalletId AND idempotency_key = :key
+                """)
+                .param("fromWalletId", fromWalletId)
+                .param("key", key)
+                .query(Transaction.class)
+                .optional();
     }
 
     /**
