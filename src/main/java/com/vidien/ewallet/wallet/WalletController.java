@@ -10,6 +10,7 @@ import java.util.List;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.vidien.ewallet.transaction.TransactionView;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 
 /**
  * Chi noi chuyen voi WalletService, khong cam thang repository.
@@ -19,6 +20,20 @@ import jakarta.validation.Valid;
  * hai duong vao cung mot bang thi som muon co mot luat nghiep vu chi ap cho mot duong, va viec
  * dich loi sang HTTP da co GlobalExceptionHandler lam roi. Khong tim thay vi thi nem
  * WalletNotFoundException, phan con lai khong phai viec cua controller.
+ *
+ * <p>
+ * @Positive tren {id}: id am hay id 0 KHONG PHAI 404. 404 co nghia "thu nay co the ton tai
+ * nhung hien khong co" - sua du lieu trong DB thi cau tra loi doi. Con id = -1 thi khong bao
+ * gio ton tai duoc, vi BIGSERIAL bat dau tu 1 va chi tang. Do la cau hoi SAI HINH DANG, cung
+ * ho voi /api/wallets/abc, nen phai 400. De 404 thi frontend tuong "user chua co vi" va di
+ * tim nham cho, con moi phat -1 van ton mot vong xuong Neon de tim thu khong the co.
+ *
+ * <p>
+ * KHONG can @Validated tren class. Tu Spring Framework 6.1 (Boot 3.2+), Spring MVC tu kiem
+ * rang buoc tren tham so controller, khong qua proxy AOP - da do that: bo @Validated van chay.
+ * Nguoc lai, them @Validated se DOI duong: Spring chuyen sang AOP cu va nem
+ * ConstraintViolationException thay vi HandlerMethodValidationException, tuc la doi luon ca
+ * handler phai viet ben GlobalExceptionHandler.
  */
 @RestController
 @RequestMapping("/api/wallets")
@@ -31,7 +46,7 @@ public class WalletController {
     }
 
     @GetMapping("/{id}")
-    public Wallet findOne(@PathVariable long id) {
+    public Wallet findOne(@PathVariable @Positive(message = "Ma vi phai la so duong") long id) {
         return walletService.findById(id);
     }
 
@@ -44,7 +59,8 @@ public class WalletController {
      * nam im, khong ai kiem, va so tien 0.001 di thang xuong database.
      */
     @PostMapping("/{id}/deposits")
-    public Wallet deposit(@PathVariable long id, @Valid @RequestBody DepositRequest request) {
+    public Wallet deposit(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
+            @Valid @RequestBody DepositRequest request) {
         return walletService.deposit(id, request.amount());
     }
 
@@ -57,7 +73,8 @@ public class WalletController {
      * dung giua API cong khai va mot cau query khong gioi han.
      */
     @GetMapping("/{id}/transactions")
-    public List<TransactionView> history(@PathVariable long id,
+    public List<TransactionView> history(
+            @PathVariable @Positive(message = "Ma vi phai la so duong") long id,
             @RequestParam(defaultValue = "20") int limit) {
         return walletService.history(id, Math.min(Math.max(limit, 1), 100));
     }

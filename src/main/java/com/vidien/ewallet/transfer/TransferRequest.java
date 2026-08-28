@@ -4,14 +4,22 @@ import java.math.BigDecimal;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 public record TransferRequest(
         // Long (bọc) chứ KHÔNG phải long (nguyên thuỷ) - đây là bẫy im lặng.
         // long không nhận null được, nên JSON thiếu hẳn trường này thì Jackson gán 0,
         // @NotNull thấy 0 -> hợp lệ -> lọt xuống service và đi tìm ví có id = 0.
         // Bọc thành Long thì thiếu trường = null = trượt ngay ở biên.
-        @NotNull(message = "Ví nguồn không được để trống") Long fromWalletId,
-        @NotNull(message = "Ví đích không được để trống") Long toWalletId,
+        //
+        // @Positive ở ĐÂY thì đúng, dù ở chỗ `amount` bên dưới nó là sai. Khác nhau ở kiểu:
+        // id là số NGUYÊN nên "> 0" là chính xác cái cần hỏi, không có id 0.001 để lọt qua.
+        // Thiếu nó thì fromWalletId = -1 xuống tới tận Neon rồi mới quay về 404 - sai mã,
+        // vì BIGSERIAL bắt đầu từ 1, ví -1 không bao giờ tồn tại được.
+        @NotNull(message = "Ví nguồn không được để trống") @Positive(
+                message = "Ví nguồn phải là số dương") Long fromWalletId,
+        @NotNull(message = "Ví đích không được để trống") @Positive(
+                message = "Ví đích phải là số dương") Long toWalletId,
 
         // 💰 Chỗ ăn điểm. @Positive là SAI ở đây: nó chỉ hỏi "có > 0 không", mà 0.001
         // thì > 0 nên qua tuốt. Cột DB là NUMERIC(19,2), Postgres làm tròn xuống 0.00

@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.vidien.ewallet.auth.EmailAlreadyUsedException;
@@ -99,6 +100,63 @@ public class GlobalExceptionHandler {
                 ErrorResponse body = ErrorResponse.of(400, "INVALID_PARAMETER",
                                 "Tham số '" + e.getName() + "' phải là số nguyên",
                                 request.getRequestURI());
+
+                return ResponseEntity.badRequest().body(body);
+        }
+
+        /**
+         * Ràng buộc trên THAM SỐ của controller trượt: @Positive trên {id} chẳng hạn.
+         *
+         * <p>
+         * Ba loại lỗi "dữ liệu sai" giờ đã đủ bộ, và chúng chết ở ba chỗ khác nhau:
+         *
+         * <pre>
+         * sai trong body, sai KIỂU     -> Jackson chết lúc dựng object -> HttpMessageNotReadable
+         * sai trong body, sai LUẬT     -> @Valid trượt                 -> MethodArgumentNotValid
+         * sai ở URL, sai KIỂU (abc)    -> type converter chết          -> MethodArgumentTypeMismatch
+         * sai ở URL, sai LUẬT (-1)     -> method validation trượt      -> HandlerMethodValidation  &lt;- đây
+         * </pre>
+         *
+         * <p>
+         * KHÔNG cần @Validated trên controller. Từ Spring Framework 6.1, Spring MVC tự kiểm ràng
+         * buộc trên tham số controller (không qua proxy AOP) - đã đo thật. Nếu gõ thêm @Validated
+         * thì Spring đổi sang đường AOP cũ và ném ConstraintViolationException, tức là handler này
+         * không bắt được nữa.
+         *
+         * <p>
+         * ⚠️ Vì sao phải có handler này dù Spring ĐÃ ghi 400 sẵn trong exception: đo trước khi
+         * viết, client nhận về 500 INTERNAL_ERROR. Tên exception ghi rõ {@code 400 BAD_REQUEST
+         * "Validation failure"} nhưng handler Exception.class ở dưới bắt trước và hạ cấp nó.
+         * Đây là LẦN THỨ HAI cùng một hình dạng - NoResourceFoundException (27/08) cũng bị lưới
+         * chắn cuối biến 404 thành 500. Luật: lưới chắn cuối không phải chỗ an toàn, nó là chỗ
+         * nguy hiểm nhất file.
+         */
+        @ExceptionHandler(HandlerMethodValidationException.class)
+        public ResponseEntity<ErrorResponse> handleParamValidation(
+                        HandlerMethodValidationException e, HttpServletRequest request) {
+
+                // Mỗi kết quả = một tham số trượt; mỗi tham số có thể trượt NHIỀU luật cùng lúc,
+                // nên phải duyệt hai tầng. Cùng lý do fieldErrors là mảng chứ không phải map.
+                //
+                // Tên method là getParameterValidationResults(), KHÔNG phải
+                // getAllValidationResults() như hầu hết bài viết trên mạng - cái tên đó là của
+                // Spring 6.x và đã bị bỏ ở Spring 7 (Boot 4.1). Cách tìm ra: javap thẳng vào
+                // spring-web-7.0.8.jar để đọc danh sách method, thay vì đoán.
+                List<ErrorResponse.FieldError> fieldErrors = e.getParameterValidationResults()
+                                .stream()
+                                .flatMap(result -> result.getResolvableErrors().stream()
+                                                .map(error -> new ErrorResponse.FieldError(
+                                                                result.getMethodParameter()
+                                                                                .getParameterName(),
+                                                                error.getDefaultMessage())))
+                                .toList();
+
+                // WARN, không ERROR, và không kèm stack trace: lỗi của client, app vẫn khoẻ.
+                log.warn("Tham so khong hop le tai {}: {}", request.getRequestURI(), fieldErrors);
+
+                ErrorResponse body = ErrorResponse.of(400, "INVALID_PARAMETER",
+                                "Tham số trên đường dẫn không hợp lệ", request.getRequestURI(),
+                                fieldErrors);
 
                 return ResponseEntity.badRequest().body(body);
         }
