@@ -8,6 +8,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import com.vidien.ewallet.auth.Caller;
 import com.vidien.ewallet.transaction.TransactionView;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -45,9 +48,28 @@ public class WalletController {
         this.walletService = walletService;
     }
 
+    /**
+     * GET /me - vi cua chinh nguoi dang goi. KHONG co id nao tren duong dan.
+     *
+     * <p>
+     * Day la cach chong BOLA manh nhat, va no khong phai la "kiem quyen ky hon": no lam cho
+     * cau hoi sai KHONG DIEN DAT DUOC. Khong co cho de go id thi khong co gi de doan.
+     * /{id} ben duoi van giu vi frontend dang goi no, nhung /me la duong nen dung.
+     *
+     * <p>
+     * Khai bao TRUOC /{id} cho de doc. Ky thuat ma noi thi Spring da uu tien duong dan CO DINH
+     * hon duong dan co bien nen khong vo, nhung thu tu dung la thu khong phai nho.
+     */
+    @GetMapping("/me")
+    public Wallet findMine(@AuthenticationPrincipal Jwt jwt) {
+        long walletId = Caller.walletId(jwt);
+        return walletService.findById(walletId, walletId);
+    }
+
     @GetMapping("/{id}")
-    public Wallet findOne(@PathVariable @Positive(message = "Ma vi phai la so duong") long id) {
-        return walletService.findById(id);
+    public Wallet findOne(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
+            @AuthenticationPrincipal Jwt jwt) {
+        return walletService.findById(id, Caller.walletId(jwt));
     }
 
     /**
@@ -60,8 +82,8 @@ public class WalletController {
      */
     @PostMapping("/{id}/deposits")
     public Wallet deposit(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
-            @Valid @RequestBody DepositRequest request) {
-        return walletService.deposit(id, request.amount());
+            @Valid @RequestBody DepositRequest request, @AuthenticationPrincipal Jwt jwt) {
+        return walletService.deposit(id, request.amount(), Caller.walletId(jwt));
     }
 
     /**
@@ -75,7 +97,7 @@ public class WalletController {
     @GetMapping("/{id}/transactions")
     public List<TransactionView> history(
             @PathVariable @Positive(message = "Ma vi phai la so duong") long id,
-            @RequestParam(defaultValue = "20") int limit) {
-        return walletService.history(id, Math.min(Math.max(limit, 1), 100));
+            @RequestParam(defaultValue = "20") int limit, @AuthenticationPrincipal Jwt jwt) {
+        return walletService.history(id, Math.min(Math.max(limit, 1), 100), Caller.walletId(jwt));
     }
 }

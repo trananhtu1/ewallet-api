@@ -37,11 +37,40 @@ public class WalletService {
     }
 
     /**
+     * ⭐ CHO BIT LO BOLA. Moi {id} den tu nguoi goi deu la DE NGHI, khong phai su that.
+     *
+     * <p>
+     * Khoa endpoint bang .authenticated() chi tra loi "anh la ai". Ham nay tra loi cau con
+     * lai: "anh duoc dung vao cai gi". Thieu no thi bat ky ai dang ky xong - mat 5 giay -
+     * deu doc duoc so du va ghi duoc vao vi cua nguoi khac, va moi cau SQL van chay dung.
+     *
+     * <p>
+     * 📌 Nem WalletNotFoundException chu KHONG phai mot loi "khong co quyen" rieng, va day
+     * la co y: hai cau tra loi phai KHONG PHAN BIET DUOC tu ben ngoai. Neu vi cua nguoi khac
+     * tra 403 con vi khong ton tai tra 404 thi ke tan cong chi can quet 1..N la biet chinh
+     * xac he thong co bao nhieu vi va id nao dang duoc dung - mot cong cu do so nguoi dung
+     * mien phi. Cung ly do voi INVALID_CREDENTIALS gop chung "sai email" va "sai mat khau".
+     *
+     * <p>
+     * So sanh theo VI chu khong theo NGUOI DUNG: rang buoc UNIQUE tren wallets.user_id o V1
+     * bao dam moi nguoi dung dung mot vi, nen hai cach tuong duong hom nay. Ngay nao cho
+     * phep mot nguoi nhieu vi thi cho nay phai doi thanh cau hoi "vi nay co thuoc ve userId
+     * khong" - va no la mot cau truy van, khong con la mot phep so sanh.
+     */
+    private void requireOwn(long walletId, long callerWalletId) {
+        if (walletId != callerWalletId) {
+            throw new WalletNotFoundException(walletId);
+        }
+    }
+
+    /**
      * readOnly = true noi voi database rang giao dich nay khong ghi gi, Postgres bo qua duoc
      * mot phan viec chuan bi ghi.
      */
     @Transactional(readOnly = true)
-    public Wallet findById(long walletId) {
+    public Wallet findById(long walletId, long callerWalletId) {
+        requireOwn(walletId, callerWalletId);
+
         return wallets.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
     }
@@ -55,7 +84,12 @@ public class WalletService {
      * @Transactional goi ca hai vao mot don vi - chet o dau cung quay ve nhu chua tung xay ra.
      */
     @Transactional
-    public Wallet deposit(long walletId, BigDecimal amount) {
+    public Wallet deposit(long walletId, BigDecimal amount, long callerWalletId) {
+        // Kiem quyen TRUOC khi cham vao database. Dat sau lenh UPDATE thi tien da vao vi
+        // nguoi khac roi moi nem exception - @Transactional se rollback that, nhung day la
+        // dua vao mot co che khac de cuu mot loi logic. Chan o dau la re nhat va chac nhat.
+        requireOwn(walletId, callerWalletId);
+
         // update() tra ve so dong bi sua. 0 = khong co vi nao mang id do, va biet duoc dieu do
         // ma khong ton them mot cau SELECT.
         int updated = wallets.addToBalance(walletId, amount);
@@ -78,7 +112,9 @@ public class WalletService {
      * phan biet duoc.
      */
     @Transactional(readOnly = true)
-    public List<TransactionView> history(long walletId, int limit) {
+    public List<TransactionView> history(long walletId, int limit, long callerWalletId) {
+        requireOwn(walletId, callerWalletId);
+
         if (wallets.findById(walletId).isEmpty()) {
             throw new WalletNotFoundException(walletId);
         }

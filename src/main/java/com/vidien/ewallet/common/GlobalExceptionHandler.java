@@ -16,6 +16,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.vidien.ewallet.auth.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.InvalidCredentialsException;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
+import com.vidien.ewallet.wallet.NotYourWalletException;
 import com.vidien.ewallet.wallet.SameWalletTransferException;
 import com.vidien.ewallet.wallet.WalletNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -223,6 +224,32 @@ public class GlobalExceptionHandler {
                                 "Số dư không đủ để thực hiện giao dịch", request.getRequestURI());
 
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
+
+        /**
+         * Người gọi tự nhận đang dùng một ví không phải của họ. **403**, không phải 401.
+         *
+         * <p>
+         * Khác nhau ở chỗ: <b>401 = tôi không biết anh là ai</b> (chưa đăng nhập, token hỏng,
+         * token hết hạn) — đăng nhập lại thì được. <b>403 = tôi biết anh là ai, và câu trả lời
+         * là không</b> — đăng nhập lại vô ích. Trả 401 ở đây sẽ khiến frontend đá người dùng
+         * về màn đăng nhập cho một việc mà đăng nhập không cứu được.
+         *
+         * <p>
+         * Log ở mức <b>WARN kèm chi tiết</b>, khác với các lỗi client khác: đây có thể là
+         * frontend gõ nhầm, nhưng cũng có thể là một người đang dò ví của người khác. Đó là
+         * dòng log đáng để lại dấu vết.
+         */
+        @ExceptionHandler(NotYourWalletException.class)
+        public ResponseEntity<ErrorResponse> handleNotYourWallet(NotYourWalletException e,
+                        HttpServletRequest request) {
+                log.warn("Tu choi quyen tai {}: {}", request.getRequestURI(), e.getMessage());
+
+                ErrorResponse body = ErrorResponse.of(403, "NOT_YOUR_WALLET",
+                                "Ví nguồn không thuộc về tài khoản đang đăng nhập",
+                                request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
         }
 
         /** Chuyen tien cho chinh minh: body sai that, nen 400. */
