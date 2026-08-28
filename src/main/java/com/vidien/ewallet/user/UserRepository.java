@@ -32,6 +32,21 @@ public class UserRepository {
                 .optional();
     }
 
+    /**
+     * Tim theo id. Dung o luong doi refresh token: luc do khong co email, chi co user_id doc
+     * ra tu bang refresh_tokens.
+     */
+    public Optional<User> findById(long id) {
+        return db.sql("""
+                SELECT id, email, password_hash, full_name, created_at
+                FROM users
+                WHERE id = :id
+                """)
+                .param("id", id)
+                .query(User.class)
+                .optional();
+    }
+
     /** Tra ve id vua sinh ra, khoi phai SELECT lai. */
     public long insert(String email, String passwordHash, String fullName) {
         return db.sql("""

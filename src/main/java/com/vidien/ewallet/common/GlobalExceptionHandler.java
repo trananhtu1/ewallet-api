@@ -15,6 +15,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.vidien.ewallet.auth.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.InvalidCredentialsException;
+import com.vidien.ewallet.auth.InvalidRefreshTokenException;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
 import com.vidien.ewallet.wallet.NotYourWalletException;
 import com.vidien.ewallet.wallet.SameWalletTransferException;
@@ -287,6 +288,30 @@ public class GlobalExceptionHandler {
 
                 ErrorResponse body = ErrorResponse.of(401, "INVALID_CREDENTIALS",
                                 "Email hoặc mật khẩu không đúng", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+        }
+
+        /**
+         * Refresh token không dùng được. **401** — client phải cho người dùng đăng nhập lại.
+         *
+         * <p>
+         * Bốn nguyên nhân, **một** thông báo: không tồn tại · hết hạn · đã thu hồi · **đã dùng
+         * rồi**. Nói rõ *"token này đã bị dùng lại"* là xác nhận cho kẻ trộm rằng nó vừa bị
+         * phát hiện, và là một gợi ý để lần sau làm nhanh tay hơn. Chi tiết ở lại `audit_log`
+         * dưới sự kiện `REFRESH_TOKEN_REUSED`.
+         *
+         * <p>
+         * Cùng nguyên tắc với `INVALID_CREDENTIALS` gộp chung sai email và sai mật khẩu.
+         */
+        @ExceptionHandler(InvalidRefreshTokenException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidRefreshToken(
+                        InvalidRefreshTokenException e, HttpServletRequest request) {
+                log.warn("Refresh token khong hop le tai {}", request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(401, "INVALID_REFRESH_TOKEN",
+                                "Phiên đã hết hạn, vui lòng đăng nhập lại",
+                                request.getRequestURI());
 
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
         }

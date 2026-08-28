@@ -35,5 +35,12 @@ public enum AuditEvent {
      * la thu duy nhat phan biet duoc "frontend go nham" voi "co nguoi dang do vi nguoi khac",
      * va phan biet duoc bang cach dem: mot lan la loi, hai muoi lan trong mot phut thi khong.
      */
-    ACCESS_DENIED
+    ACCESS_DENIED,
+
+    /**
+     * 🚨 Mot refresh token DA DUNG ROI duoc trinh ra lan nua - nghia la co HAI ban sao dang
+     * ton tai. Su kien nghiem trong nhat trong danh sach nay: no khong the xay ra o mot
+     * client hoat dong binh thuong.
+     */
+    REFRESH_TOKEN_REUSED
 }
