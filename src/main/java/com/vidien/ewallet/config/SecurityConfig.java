@@ -96,10 +96,19 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/ping", "/health").permitAll()
 
-                        // TAM THOI mo. Frontend dang duoc lam song song va chua co man dang
-                        // nhap; khoa ngay bay gio la chan viec cua phien kia.
-                        // Buoi sau doi thanh .authenticated() cung luc voi FE.
-                        .requestMatchers("/api/wallets/**", "/api/transfers/**").permitAll()
+                        // Da khoa (28/08). Truoc do co y mo de khong chan phien lam FE, va
+                        // FE gio da co man dang nhap nen mon no do dong duoc.
+                        //
+                        // ⚠️ NHUNG dong nay MOT MINH NO KHONG PHAI LA BAO MAT. No chi tra loi
+                        // "anh la ai", khong tra loi "anh duoc dung vao cai gi". Chi khoa den
+                        // day thi bat ky ai DANG KY XONG deu goi duoc:
+                        //     GET  /api/wallets/1          -> xem so du nguoi khac
+                        //     POST /api/wallets/1/deposits -> ghi vao vi nguoi khac
+                        //     POST /api/transfers {"fromWalletId": 1} -> rut tien nguoi khac
+                        // Dang ky mat 5 giay. Lo do ten la BOLA/IDOR, hang 1 OWASP API Top 10.
+                        //
+                        // Cho bit lo that su nam o tang service: xem WalletService.requireOwn.
+                        .requestMatchers("/api/wallets/**", "/api/transfers/**").authenticated()
 
                         .anyRequest().authenticated())
 

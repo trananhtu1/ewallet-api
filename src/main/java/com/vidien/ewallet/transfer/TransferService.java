@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.vidien.ewallet.transaction.TransactionRepository;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
+import com.vidien.ewallet.wallet.NotYourWalletException;
 import com.vidien.ewallet.wallet.SameWalletTransferException;
 import com.vidien.ewallet.wallet.Wallet;
 import com.vidien.ewallet.wallet.WalletNotFoundException;
@@ -29,7 +30,22 @@ public class TransferService {
     }
 
     @Transactional
-    public Wallet transfer(long fromWalletId, long toWalletId, BigDecimal amount) {
+    public Wallet transfer(long fromWalletId, long toWalletId, BigDecimal amount,
+            long callerWalletId) {
+        // ⭐ CHO BIT LO BOLA, va day la ca thuan nhat cua no: vi NGUON den tu BODY.
+        // Khong co dong nay thi bat ky ai dang ky xong deu goi duoc
+        //     POST /api/transfers {"fromWalletId": 1, "toWalletId": <vi cua toi>, ...}
+        // va rut sach vi so 1. Endpoint da khoa bang .authenticated(), SQL chay dung,
+        // transaction dung, deadlock da chong - va tien van bi lay mat.
+        //
+        // Kiem TRUOC MOI THU: truoc ca lockById. Khoa mot dong vi cua nguoi khac dù chi trong
+        // vai mili giay cung la de mot nguoi la chan duong giao dich that cua ho.
+        if (fromWalletId != callerWalletId) {
+            throw new NotYourWalletException(fromWalletId, callerWalletId);
+        }
+
+        // toWalletId thi KHONG kiem - chuyen tien cho nguoi khac chinh la muc dich cua ham nay.
+
         // Chan tu dau: chuyen cho chinh minh khong phai giao dich, va neu de lot thi doan duoi
         // se tru roi cong lai tren CUNG mot dong -> so du khong doi nhung so cai co them mot
         // dong vo nghia.

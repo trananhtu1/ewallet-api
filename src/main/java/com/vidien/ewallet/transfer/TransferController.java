@@ -4,6 +4,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import com.vidien.ewallet.auth.Caller;
 import com.vidien.ewallet.wallet.Wallet;
 import jakarta.validation.Valid;
 
@@ -29,8 +32,9 @@ public class TransferController {
      * string, va moi field se la null.
      */
     @PostMapping
-    public Wallet create(@Valid @RequestBody TransferRequest request) {
+    public Wallet create(@Valid @RequestBody TransferRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
         return transferService.transfer(request.fromWalletId(), request.toWalletId(),
-                request.amount());
+                request.amount(), Caller.walletId(jwt));
     }
 }
