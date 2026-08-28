@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.vidien.ewallet.auth.domain.Caller;
-import com.vidien.ewallet.transaction.domain.TransactionView;
+import com.vidien.ewallet.transaction.api.dto.TransactionView;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import com.vidien.ewallet.wallet.api.dto.DepositRequest;
 import com.vidien.ewallet.shared.dto.ErrorResponse;
 import com.vidien.ewallet.shared.exception.GlobalExceptionHandler;
-import com.vidien.ewallet.wallet.domain.Wallet;
+import com.vidien.ewallet.wallet.api.dto.WalletResponse;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
 import com.vidien.ewallet.wallet.domain.WalletService;
 
@@ -50,8 +50,19 @@ public class WalletController {
 
     private final WalletService walletService;
 
-    public WalletController(WalletService walletService) {
+    /**
+     * ⭐ Mapper la thu ngan entity ra khoi hop dong API.
+     *
+     * <p>
+     * Truoc dot nay, {@code Wallet} vua la dong trong bang vua la JSON tra ve - doi mot cot la
+     * doi luon hop dong voi frontend. Gio controller <b>khong bao gio</b> tra entity: moi
+     * duong ra deu di qua {@code toResponse()}.
+     */
+    private final WalletMapper walletMapper;
+
+    public WalletController(WalletService walletService, WalletMapper walletMapper) {
         this.walletService = walletService;
+        this.walletMapper = walletMapper;
     }
 
     /**
@@ -67,15 +78,15 @@ public class WalletController {
      * hon duong dan co bien nen khong vo, nhung thu tu dung la thu khong phai nho.
      */
     @GetMapping("/me")
-    public Wallet findMine(@AuthenticationPrincipal Jwt jwt) {
+    public WalletResponse findMine(@AuthenticationPrincipal Jwt jwt) {
         long walletId = Caller.walletId(jwt);
-        return walletService.findById(walletId, walletId);
+        return walletMapper.toResponse(walletService.findById(walletId, walletId));
     }
 
     @GetMapping("/{id}")
-    public Wallet findOne(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
+    public WalletResponse findOne(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
             @AuthenticationPrincipal Jwt jwt) {
-        return walletService.findById(id, Caller.walletId(jwt));
+        return walletMapper.toResponse(walletService.findById(id, Caller.walletId(jwt)));
     }
 
     /**
@@ -87,9 +98,10 @@ public class WalletController {
      * nam im, khong ai kiem, va so tien 0.001 di thang xuong database.
      */
     @PostMapping("/{id}/deposits")
-    public Wallet deposit(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
+    public WalletResponse deposit(@PathVariable @Positive(message = "Ma vi phai la so duong") long id,
             @Valid @RequestBody DepositRequest request, @AuthenticationPrincipal Jwt jwt) {
-        return walletService.deposit(id, request.amount(), Caller.walletId(jwt));
+        return walletMapper.toResponse(
+                walletService.deposit(id, request.amount(), Caller.walletId(jwt)));
     }
 
     /**

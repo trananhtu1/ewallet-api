@@ -6,6 +6,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.vidien.ewallet.transaction.domain.Transaction;
+import com.vidien.ewallet.transaction.domain.TransactionStatus;
+import com.vidien.ewallet.transaction.domain.TransactionType;
 import com.vidien.ewallet.transaction.infra.TransactionRepository;
 import com.vidien.ewallet.wallet.infra.WalletRepository;
 
@@ -69,7 +72,13 @@ public class FailedTransferRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(long fromWalletId, long toWalletId, BigDecimal amount) {
-        transactions.insertFailedTransfer(fromWalletId, toWalletId, amount);
+        transactions.save(Transaction.builder()
+                .fromWalletId(fromWalletId)
+                .toWalletId(toWalletId)
+                .amount(amount)
+                .type(TransactionType.TRANSFER)
+                .status(TransactionStatus.FAILED)
+                .build());
         log.info("Ghi so cai: chuyen {} tu vi {} sang vi {} THAT BAI", amount, fromWalletId,
                 toWalletId);
     }

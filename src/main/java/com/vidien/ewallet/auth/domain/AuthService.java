@@ -18,6 +18,7 @@ import com.vidien.ewallet.audit.domain.AuditEvent;
 import com.vidien.ewallet.audit.domain.Auditor;
 import com.vidien.ewallet.shared.config.SecurityConfig;
 import com.vidien.ewallet.user.domain.User;
+import com.vidien.ewallet.wallet.domain.WalletService;
 import com.vidien.ewallet.user.infra.UserRepository;
 import com.vidien.ewallet.wallet.infra.WalletRepository;
 import com.vidien.ewallet.auth.api.dto.AuthResponse;
@@ -32,18 +33,20 @@ public class AuthService {
 
     private final UserRepository users;
     private final WalletRepository wallets;
+    private final WalletService walletService;
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final Duration tokenTtl;
     private final Auditor audit;
     private final RefreshTokenService refreshTokens;
 
-    public AuthService(UserRepository users, WalletRepository wallets,
+    public AuthService(UserRepository users, WalletRepository wallets, WalletService walletService,
             PasswordEncoder passwordEncoder, JwtEncoder jwtEncoder,
             @Value("${app.jwt.ttl:PT15M}") Duration tokenTtl, Auditor audit,
             RefreshTokenService refreshTokens) {
         this.users = users;
         this.wallets = wallets;
+        this.walletService = walletService;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.tokenTtl = tokenTtl;
@@ -64,13 +67,18 @@ public class AuthService {
         // Kiem truoc de tra loi tu te. Nhung KHONG dua vao mot minh no: giua luc kiem va luc
         // ghi van co khe ho cho hai request dang ky cung email cung luc. Bit khe ho do la
         // unique index ux_users_email_lower o V1 - no la thu quyet dinh cuoi cung.
-        if (users.findByEmail(request.email()).isPresent()) {
+        if (users.findByEmailIgnoringCase(request.email()).isPresent()) {
             throw new EmailAlreadyUsedException(request.email());
         }
 
         String hash = passwordEncoder.encode(request.password());
-        long userId = users.insert(request.email(), hash, request.fullName());
-        long walletId = wallets.insertForUser(userId);
+        long userId = users.save(User.builder()
+                .email(request.email())
+                .passwordHash(hash)
+                .fullName(request.fullName())
+                .build())
+                .getId();
+        long walletId = walletService.createForUser(userId).getId();
 
         audit.record(AuditEvent.REGISTERED, userId,
                 Map.of("email", request.email(), "walletId", walletId));
@@ -99,7 +107,7 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        Optional<User> found = users.findByEmail(request.email());
+        Optional<User> found = users.findByEmailIgnoringCase(request.email());
 
         if (found.isEmpty()) {
             // Ghi nhat ky RIENG cho "email khong ton tai" va "sai mat khau" - nhung CHI trong
@@ -118,18 +126,19 @@ public class AuthService {
 
         // matches() doc salt tu chinh cai hash roi bam lai mat khau vua nhap de so.
         // KHONG BAO GIO dung equals() - bam cung mot mat khau hai lan ra hai chuoi khac nhau.
-        if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             // KHONG BAO GIO ghi mat khau vua nhap vao nhat ky, ke ca dang bam. Nhat ky la
             // thu duoc doc nhieu nhat va bao ve it nhat trong ca he thong.
-            audit.record(AuditEvent.LOGIN_FAILED, user.id(),
+            audit.record(AuditEvent.LOGIN_FAILED, user.getId(),
                     Map.of("email", request.email(), "reason", "WRONG_PASSWORD"));
             throw new InvalidCredentialsException();
         }
 
-        long walletId = wallets.findByUserId(user.id())
-                .orElseThrow(InvalidCredentialsException::new);
+        long walletId = wallets.findByUserId(user.getId())
+                .orElseThrow(InvalidCredentialsException::new)
+                .getId();
 
-        return issueToken(user.id(), user.email(), user.fullName(), walletId);
+        return issueToken(user.getId(), user.getEmail(), user.getFullName(), walletId);
     }
 
     /**
@@ -148,12 +157,13 @@ public class AuthService {
 
         User user = users.findById(rotated.userId())
                 .orElseThrow(InvalidRefreshTokenException::new);
-        long walletId = wallets.findByUserId(user.id())
-                .orElseThrow(InvalidRefreshTokenException::new);
+        long walletId = wallets.findByUserId(user.getId())
+                .orElseThrow(InvalidRefreshTokenException::new)
+                .getId();
 
         // fullName de null: client da co roi tu luc dang nhap. @JsonInclude(NON_NULL) tren
         // AuthResponse loai no khoi JSON.
-        return buildResponse(user.id(), user.email(), null, walletId, rotated.refreshToken());
+        return buildResponse(user.getId(), user.getEmail(), null, walletId, rotated.refreshToken());
     }
 
     /** Dang xuat THAT SU: thu hoi moi refresh token. Access token cu song not TTL 15 phut. */

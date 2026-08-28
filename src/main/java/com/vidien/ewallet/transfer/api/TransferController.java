@@ -8,7 +8,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.vidien.ewallet.auth.domain.Caller;
 import org.springframework.web.bind.annotation.RequestHeader;
-import com.vidien.ewallet.wallet.domain.Wallet;
+import com.vidien.ewallet.wallet.api.WalletMapper;
+import com.vidien.ewallet.wallet.api.dto.WalletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import com.vidien.ewallet.transfer.api.dto.TransferRequest;
@@ -19,9 +20,11 @@ import com.vidien.ewallet.transfer.domain.TransferService;
 public class TransferController {
 
     private final TransferService transferService;
+    private final WalletMapper walletMapper;
 
-    public TransferController(TransferService transferService) {
+    public TransferController(TransferService transferService, WalletMapper walletMapper) {
         this.transferService = transferService;
+        this.walletMapper = walletMapper;
     }
 
     /**
@@ -54,13 +57,13 @@ public class TransferController {
      * xuong toi tan driver Postgres roi mo'i vo, va vo bang mot exception kho doc.
      */
     @PostMapping
-    public Wallet create(@Valid @RequestBody TransferRequest request,
+    public WalletResponse create(@Valid @RequestBody TransferRequest request,
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(name = "Idempotency-Key",
                     required = false) @Size(max = 64,
                             message = "Idempotency-Key toi da 64 ky tu") String idempotencyKey) {
 
-        return transferService.transfer(request.fromWalletId(), request.toWalletId(),
-                request.amount(), Caller.walletId(jwt), idempotencyKey);
+        return walletMapper.toResponse(transferService.transfer(request.fromWalletId(), request.toWalletId(),
+                request.amount(), Caller.walletId(jwt), idempotencyKey));
     }
 }

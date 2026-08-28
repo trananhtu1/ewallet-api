@@ -1,124 +1,87 @@
 package com.vidien.ewallet.auth.infra;
 
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import com.vidien.ewallet.auth.domain.RefreshToken;
 
 @Repository
-public class RefreshTokenRepository {
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
-    private final JdbcClient db;
-
-    public RefreshTokenRepository(JdbcClient db) {
-        this.db = db;
-    }
-
-    /**
-     * ⚠️ expiresAt phai doi sang OffsetDateTime truoc khi truyen xuong.
-     *
-     * <p>
-     * Do that, va thong bao rat ro rang so voi hau het loi JDBC:
-     *
-     * <pre>
-     * PSQLException: Can't infer the SQL type to use for an instance of java.time.Instant.
-     * </pre>
-     *
-     * <p>
-     * Cho phan truc giac: doc TIMESTAMPTZ ra {@code Instant} thi chay tot - moi record trong
-     * project nay deu lam vay. Nhung DOC va GHI khong doi xung: luc doc, driver biet kieu cot
-     * nen doi duoc; luc ghi, no phai suy ra kieu SQL tu kieu Java, ma bang anh xa cua JDBC 4.2
-     * chi co {@code OffsetDateTime} tro toi TIMESTAMP WITH TIME ZONE. {@code Instant} khong
-     * nam trong bang do.
-     *
-     * <p>
-     * ZoneOffset.UTC chu khong phai mui gio may chu: {@code Instant} von la mot moc tren truc
-     * thoi gian, khong mang mui gio nao. Gan mui gio may chu vao la them mot thong tin khong
-     * co that, va la thu se sai khi deploy sang mot may cau hinh khac.
-     */
-    public void insert(long userId, String tokenHash, UUID familyId, Instant expiresAt) {
-        db.sql("""
-                INSERT INTO refresh_tokens (user_id, token_hash, family_id, expires_at)
-                VALUES (:userId, :hash, :family, :expiresAt)
-                """)
-                .param("userId", userId)
-                .param("hash", tokenHash)
-                .param("family", familyId)
-                .param("expiresAt", OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC))
-                .update();
-    }
+    // ⭐ @Transactional dat o TUNG METHOD cua repository, khong o service goi chung.
+    //
+    // Doi sang JPA lam lo ra mot xung dot voi ket luan da rut hom nay: rotate() CO Y khong
+    // co @Transactional - boc transaction quanh no thi lenh thu hoi family bi rollback cuon
+    // di boi chinh dong throw ngay sau. Nhung @Modifying cua JPA thi BAT BUOC phai co
+    // transaction, neu khong no nem:
+    //
+    //   No EntityManager with actual transaction available - cannot reliably process 'flush'
+    //
+    // Dat o day thi ca hai deu duoc: moi cau UPDATE tu mo va tu commit mot transaction rieng,
+    // dung bang hanh vi auto-commit cua JdbcClient truoc day. Va do cung la dieu DUNG ve mat
+    // thiet ke - don vi nguyen tu la MOT CAU UPDATE, khong phai ca method.
 
     /**
      * Tim theo BAM cua token, khong theo token.
      *
      * <p>
-     * KHONG loc {@code used_at IS NULL} o day - co y. Phai lay ve CA token da dung roi thi
-     * tang tren moi phan biet duoc "token nay khong ton tai" (rac) voi "token nay da dung roi"
-     * (dau hieu ro ri). Loc o SQL la vut mat thong tin do.
+     * KHONG loc {@code usedAt IS NULL} o day - co y. Phai lay ve CA token da dung roi thi tang
+     * tren moi phan biet duoc "token nay khong ton tai" (rac) voi "token nay da dung roi"
+     * (dau hieu ro ri). Loc o cau truy van la vut mat thong tin do.
      */
-    public Optional<RefreshToken> findByHash(String tokenHash) {
-        return db.sql("""
-                SELECT id, user_id, token_hash, family_id, issued_at, expires_at,
-                       used_at, revoked_at
-                FROM refresh_tokens
-                WHERE token_hash = :hash
-                """)
-                .param("hash", tokenHash)
-                .query(RefreshToken.class)
-                .optional();
-    }
+    Optional<RefreshToken> findByTokenHash(String tokenHash);
 
     /**
      * ⭐ GIANH quyen dung token nay. Tra ve 1 neu gianh duoc, 0 neu ai do gianh truoc roi.
      *
      * <p>
-     * Ten la "claim" chu khong phai "markUsed", vi day khong phai mot lenh ghi thu dong - no
-     * la <b>cong tac nguyen tu</b> quyet dinh ai duoc doi token.
+     * <b>Van la cau UPDATE viet tay, khong phai doc-sua-luu qua JPA</b> - va day la cho thu ba
+     * co y giu SQL. Ly do da do:
      *
      * <p>
-     * Dieu kien {@code AND used_at IS NULL} nam NGAY TRONG cau UPDATE, khong phai kiem o Java
-     * roi moi ghi. Doc-roi-ghi o day co mot khe ho, va da do that: hai request goi /refresh
-     * cung luc voi cung mot token thi <b>ca hai deu doc thay "chua dung"</b> va ca hai deu
-     * duoc doi - tuc la co che phat hien dung lai khong no dung luc can nhat.
+     * Doc entity ra, kiem {@code usedAt == null}, roi {@code save()} - do la doc-roi-ghi, va
+     * hai request song song <b>ca hai deu doc thay "chua dung"</b> va ca hai deu duoc doi
+     * token. Do that: hai lenh /refresh dong thoi -> CA HAI deu 200. Co che phat hien dung lai
+     * khong no dung luc can nhat.
      *
      * <p>
-     * 📌 Cung mot hinh dang voi {@code subtractFromBalance} tra ve 0 khi khong du tien, va voi
-     * bai hoc "20 lenh chuyen tien cung luc" hom 27/08: <b>dieu kien phai nam trong cau UPDATE
-     * thi database moi la nguoi phan xu.</b>
+     * Dieu kien {@code usedAt IS NULL} nam NGAY TRONG cau UPDATE thi database la nguoi phan
+     * xu, va so dong tra ve <b>chinh la</b> cau tra loi "ai la nguoi dau tien". Cung hinh dang
+     * voi {@code subtractFromBalance} tra 0 khi khong du tien.
+     *
+     * <p>
+     * ⚠️ {@code @Version} khong thay the duoc cho nay: optimistic locking hoi "co ai vua sua
+     * khong", con day hoi "co ai gianh truoc khong" - va no phai tra loi bang mot cau lenh duy
+     * nhat, khong phai bang mot lan thu lai.
      */
-    public int claimForRotation(long id) {
-        return db.sql("UPDATE refresh_tokens SET used_at = now() WHERE id = :id AND used_at IS NULL")
-                .param("id", id)
-                .update();
-    }
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE RefreshToken t SET t.usedAt = CURRENT_TIMESTAMP "
+            + "WHERE t.id = :id AND t.usedAt IS NULL")
+    @Transactional
+    int claimForRotation(@Param("id") long id);
 
     /**
-     * ⭐ Giet CA family. Goi khi phat hien mot token da dung lai duoc trinh ra lan nua.
+     * Giet CA family. Goi khi phat hien mot token da dung duoc trinh ra lan nua.
      *
      * <p>
      * Tra ve so dong bi thu hoi - con so do di thang vao nhat ky kiem toan, vi no cho biet
      * chuoi bi anh huong dai bao nhieu.
      */
-    public int revokeFamily(UUID familyId) {
-        return db.sql("""
-                UPDATE refresh_tokens SET revoked_at = now()
-                WHERE family_id = :family AND revoked_at IS NULL
-                """)
-                .param("family", familyId)
-                .update();
-    }
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE RefreshToken t SET t.revokedAt = CURRENT_TIMESTAMP "
+            + "WHERE t.familyId = :familyId AND t.revokedAt IS NULL")
+    @Transactional
+    int revokeFamily(@Param("familyId") UUID familyId);
 
     /** Dang xuat: thu hoi moi token con song cua nguoi nay. */
-    public int revokeAllForUser(long userId) {
-        return db.sql("""
-                UPDATE refresh_tokens SET revoked_at = now()
-                WHERE user_id = :userId AND revoked_at IS NULL
-                """)
-                .param("userId", userId)
-                .update();
-    }
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE RefreshToken t SET t.revokedAt = CURRENT_TIMESTAMP "
+            + "WHERE t.userId = :userId AND t.revokedAt IS NULL")
+    @Transactional
+    int revokeAllForUser(@Param("userId") long userId);
 }

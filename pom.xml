@@ -16,7 +16,29 @@
 
 	<properties>
 		<java.version>17</java.version>
+		<mapstruct.version>1.6.3</mapstruct.version>
 	</properties>
+
+	<!--
+	  spring-boot-dependencies KHONG quan version cua Testcontainers, nen phai nhap BOM rieng.
+	  Nhap BOM chu khong go version vao tung dependency: mot cho khai bao, va cac artifact cua
+	  Testcontainers luon khop version nhau - lech version giua chung la mot loai loi rat kho
+	  doc vi no vo o luc chay chu khong luc bien dich.
+
+	  Cung bai hoc voi luc chon thu vien JWT hom 27/08: uu tien thu co BOM quan, de nang mot
+	  cai la ca ho di theo.
+	-->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers-bom</artifactId>
+				<version>1.21.3</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<dependencies>
 		<dependency>
@@ -28,11 +50,34 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
-		<!-- Tuan nay chi can chung minh noi duoc toi Neon. JPA/Hibernate de Week 3
-		     luc dung bang that: no keo them ~10 jar va mot dong "magic" chua can giai thich. -->
+		<!-- JPA/Hibernate. Ghi chu cu o day noi "de Week 3 hay lam, gio no keo them ~10 jar
+		     va mot dong magic chua can giai thich" - dung o thoi diem do, va gio thi nguoc lai:
+		     JD ghi ro JPA/Hibernate, va muc tieu cua project la QUEN hinh dang code doanh
+		     nghiep truoc khi va vao no that.
+
+		     Keo theo luon spring-boot-starter-jdbc, nen KHONG khai bao lai: JdbcClient van
+		     dung duoc, va no van la duong cho nhung cau SQL ma JPA khong dien dat noi -
+		     cu the la muc khoa FOR NO KEY UPDATE o WalletRepository. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-jdbc</artifactId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+
+		<!-- Bo @Getter/@Builder/@RequiredArgsConstructor viet tay. Chi tac dong luc BIEN DICH
+		     (provided), khong di theo vao file jar chay that. -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- Doi entity <-> DTO. Sinh code luc BIEN DICH chu khong dung reflection luc chay,
+		     nen go sai ten truong thi VO NGAY o buoc build - khac han cac thu vien mapper
+		     dua tren reflection, chung im lang tra ve null. -->
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<version>${mapstruct.version}</version>
 		</dependency>
 		<!-- Flyway: bảng sinh ra từ file trong repo, không phải gõ tay trên Neon console.
                      Chạy lúc khởi động, TRƯỚC khi Tomcat mở cổng. -->
@@ -71,6 +116,29 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- Testcontainers: dung mot Postgres THAT trong Docker cho tung lan chay test.
+		     Khong dung H2 - va day khong phai so thich:
+
+		     H2 khong co FOR NO KEY UPDATE, khong co JSONB, khong co UNION ALL voi LIMIT trong
+		     nhanh con, va khong tai hien duoc deadlock. Tuc la no khong chay duoc dung nhung
+		     thu can canh giu nhat. Test tren mot database KHAC voi production la test mot he
+		     thong khac. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -78,6 +146,86 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<!-- Lombok chi can luc bien dich. Khong loai ra thi no nam trong jar
+					     chay that ma khong ai dung toi. -->
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+
+			<!-- ⚠️ THU TU annotation processor QUAN TRONG, va sai thu tu la mot loi rat kho
+			     doan: Lombok phai chay TRUOC MapStruct.
+
+			     MapStruct sinh code mapper bang cach doc getter/setter cua entity. Neu no
+			     chay truoc Lombok thi luc do entity CHUA CO getter nao - va thong bao loi
+			     se la "Unknown property in result type" chu khong phai "thieu Lombok",
+			     tro vao dung cai truong minh vua khai bao. -->
+			<!--
+			  ⚠️ Thieu plugin nay thi cac lop *IT KHONG BAO GIO CHAY, va build van xanh.
+
+			  Surefire (chay o `mvn test`) chi nhan *Test, Test*, *Tests, *TestCase. Cac lop
+			  ket thuc bang *IT thuoc ve Failsafe va chi chay o `mvn verify`. Do la quy uoc
+			  chuan cua Maven, va ly do co that: unit test phai chay trong vai giay o moi lan
+			  build, con integration test can Docker va mat lau hon nhieu - tron chung thi
+			  hoac vong lap phat trien cham lai, hoac nguoi ta bat dau bo qua test.
+
+			  📌 Va day dung la loai loi im lang da gap bon lan trong project: khai bao mot thu
+			  ma thieu cai kich hoat no. Viet 4 integration test rat ky, chay `mvn test`, thay
+			  BUILD SUCCESS - va khong mot dong nao trong so do tung duoc thuc thi.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<!-- verify PHAI co: thieu no thi test do van khong lam do build. -->
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+						<path>
+							<groupId>org.mapstruct</groupId>
+							<artifactId>mapstruct-processor</artifactId>
+							<version>${mapstruct.version}</version>
+						</path>
+						<!-- Cho MapStruct doc duoc @Builder cua Lombok. Thieu no thi mapper
+						     sinh ra van bien dich duoc nhung goi constructor thay vi builder. -->
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok-mapstruct-binding</artifactId>
+							<version>0.2.0</version>
+						</path>
+					</annotationProcessorPaths>
+					<compilerArgs>
+						<!-- Ten tham so giu lai trong file class. Spring dung no de biet
+						     @PathVariable long id ten la "id" ma khong phai khai bao lai. -->
+						<arg>-parameters</arg>
+						<!-- Mapper la @Component cua Spring, khong phai Mappers.getMapper(). -->
+						<arg>-Amapstruct.defaultComponentModel=spring</arg>
+						<!-- Quen map mot truong -> VO LUC BUILD, khong phai im lang tra null.
+						     Day la ca diem chon MapStruct thay vi mot mapper reflection. -->
+						<arg>-Amapstruct.unmappedTargetPolicy=ERROR</arg>
+					</compilerArgs>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

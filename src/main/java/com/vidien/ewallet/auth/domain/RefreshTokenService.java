@@ -69,7 +69,15 @@ public class RefreshTokenService {
         // phai ma hoa them lan nua.
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
 
-        tokens.insert(userId, hash(token), familyId, Instant.now().plus(ttl));
+        tokens.save(RefreshToken.builder()
+                .userId(userId)
+                .tokenHash(hash(token))
+                .familyId(familyId)
+                // Instant di thang vao TIMESTAMPTZ duoc - JPA lo phan doi kieu.
+                // Luc dung JdbcClient thi cho nay nem "Can't infer the SQL type for
+                // java.time.Instant" va phai tu doi sang OffsetDateTime.
+                .expiresAt(Instant.now().plus(ttl))
+                .build());
         return token;
     }
 
@@ -129,7 +137,7 @@ public class RefreshTokenService {
      * moi -> nguoi dung phai dang nhap lai. Hiem, va la huong hong AN TOAN (fail-closed).
      */
     public Rotated rotate(String presentedToken) {
-        Optional<RefreshToken> found = tokens.findByHash(hash(presentedToken));
+        Optional<RefreshToken> found = tokens.findByTokenHash(hash(presentedToken));
 
         if (found.isEmpty()) {
             // Khong co trong bang: token bia ra, hoac tu mot lan reset database. Khong co
@@ -142,7 +150,7 @@ public class RefreshTokenService {
 
         // Chan som cac ly do KHONG phai dau hieu tan cong: het han, hoac da bi thu hoi.
         // Kiem truoc de khong lam on nhat ky bang nhung ca binh thuong.
-        if (t.revokedAt() != null || !Instant.now().isBefore(t.expiresAt())) {
+        if (t.getRevokedAt() != null || !Instant.now().isBefore(t.getExpiresAt())) {
             throw new InvalidRefreshTokenException();
         }
 
@@ -156,27 +164,27 @@ public class RefreshTokenService {
         // Duong thu hai la duong da bo sot o ban dau, va da do that: hai lenh /refresh song
         // song voi cung mot token -> CA HAI deu 200. Doc-roi-ghi khong bao gio du de phan xu
         // chuyen "ai la nguoi dau tien" - dieu kien phai nam trong cau UPDATE.
-        if (t.usedAt() != null || tokens.claimForRotation(t.id()) == 0) {
+        if (t.getUsedAt() != null || tokens.claimForRotation(t.getId()) == 0) {
             // Goi THANG, khong qua bean REQUIRES_NEW: method nay khong co transaction nen
             // lenh UPDATE tu commit ngay - khong co gi de rollback cuon di, va cung khong co
             // transaction ngoai nao de tu chan chinh minh.
-            int killed = tokens.revokeFamily(t.familyId());
+            int killed = tokens.revokeFamily(t.getFamilyId());
 
             log.warn("PHAT HIEN DUNG LAI refresh token cua user {} - thu hoi ca family {} ({} token)",
-                    t.userId(), t.familyId(), killed);
+                    t.getUserId(), t.getFamilyId(), killed);
 
-            audit.record(AuditEvent.REFRESH_TOKEN_REUSED, t.userId(),
-                    Map.of("familyId", t.familyId().toString(), "revokedCount", killed,
+            audit.record(AuditEvent.REFRESH_TOKEN_REUSED, t.getUserId(),
+                    Map.of("familyId", t.getFamilyId().toString(), "revokedCount", killed,
                             // Co the null o duong thu hai (hai request dong thoi): luc doc thi
                             // chua ai dung, den luc ghi moi thua. Ghi ro de nguoi doc nhat ky
                             // phan biet duoc hai kich ban.
-                            "detectedBy", t.usedAt() == null ? "CONCURRENT_CLAIM" : "SECOND_USE"));
+                            "detectedBy", t.getUsedAt() == null ? "CONCURRENT_CLAIM" : "SECOND_USE"));
 
             throw new InvalidRefreshTokenException();
         }
 
         // Toi day: da gianh duoc quyen, va chi MOT request lam duoc dieu do.
-        return new Rotated(t.userId(), issue(t.userId(), t.familyId()));
+        return new Rotated(t.getUserId(), issue(t.getUserId(), t.getFamilyId()));
     }
 
     /** Dang xuat that su: thu hoi moi refresh token con song. Access token cu van song not TTL. */
