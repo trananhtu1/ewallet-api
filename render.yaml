@@ -46,15 +46,26 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
-      # Khoa ky JWT. sync: false = Blueprint KHONG mang gia tri theo, phai tu dat
-      # trong Render Dashboard -> Environment. Khoa ky ma nam trong git thi ai
-      # clone repo cung phat duoc token hop le.
+      # Khoa ky JWT.
       #
-      # Sinh khoa: openssl rand -base64 48   (HS256 doi it nhat 32 ky tu)
-      # Thieu bien nay -> app chet ngay luc khoi dong voi
-      # "Could not resolve placeholder 'JWT_SECRET'", va Render giu ban CU dang chay.
+      # generateValue: true = RENDER TU SINH mot chuoi ngau nhien luc tao bien,
+      # va khong ai phai go gi. Truoc day cho nay de sync: false, nghia la
+      # "Render se HOI, nguoi deploy tu dan vao" - va do la mot buoc tay giua
+      # mot quy trinh tu dong, tuc la mot buoc som muon co ngay bi quen.
+      # Quen no thi app chet luc khoi dong voi
+      # "Could not resolve placeholder 'JWT_SECRET'".
+      #
+      # Van an toan bang sync: false ve mat bi mat: gia tri KHONG nam trong file
+      # nay, khong vao git. Khac o cho ai sinh ra no - Render chu khong phai
+      # nguoi go tay. Va Render sinh chuoi base64 256-bit = 44 ky tu, thoa dieu
+      # kien >= 32 ky tu cua HS256.
+      #
+      # ⚠️ Sinh MOT LAN roi giu nguyen. Neu co ngay nao doi khoa nay (tao lai
+      # service chang han) thi MOI token dang luu tren may nguoi dung deu thanh
+      # 401 - ho phai dang nhap lai. Voi TTL 2 gio thi do la chuyen cua dung mot
+      # lan, va frontend da xu ly san: 401 kem token -> xoa phien -> ve /login.
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
 
 # KHÔNG khai báo database ở đây. Database của Render HẾT HẠN SAU 30 NGÀY -
 # deploy 23/08 thì nó chết khoảng 22/09, đúng lúc bắt đầu rải CV.
