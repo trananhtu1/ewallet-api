@@ -134,7 +134,9 @@ public class AuthService {
      * mot refresh token con dung duoc - va no bi <b>xoay vong</b>: cai vua dung chet ngay,
      * client nhan cai moi. Chi tiet va ly do o RefreshTokenService.rotate().
      */
-    @Transactional
+    // CO Y KHONG co @Transactional - xem ghi chu day du o RefreshTokenService.rotate().
+    // Boc transaction o day thi rotate() gia nhap no (propagation REQUIRED) va ca hai nguy
+    // co quay lai: rollback cuon mat lenh thu hoi, va transaction tu chan chinh minh.
     public AuthResponse refresh(String refreshToken) {
         RefreshTokenService.Rotated rotated = refreshTokens.rotate(refreshToken);
 

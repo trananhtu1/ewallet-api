@@ -44,15 +44,12 @@ public class RefreshTokenService {
 
     private final SecureRandom random = new SecureRandom();
     private final RefreshTokenRepository tokens;
-    private final RefreshTokenRevoker revoker;
     private final Auditor audit;
     private final Duration ttl;
 
-    public RefreshTokenService(RefreshTokenRepository tokens, RefreshTokenRevoker revoker,
-            Auditor audit,
+    public RefreshTokenService(RefreshTokenRepository tokens, Auditor audit,
             @Value("${app.jwt.refresh-ttl:P7D}") Duration ttl) {
         this.tokens = tokens;
-        this.revoker = revoker;
         this.audit = audit;
         this.ttl = ttl;
     }
@@ -101,8 +98,34 @@ public class RefreshTokenService {
      * <b>CA FAMILY</b> - toan bo chuoi ke tu lan dang nhap dau. Ca hai ben deu phai dang nhap
      * lai, va do la gia phai tra dung: mot lan phien phuc cho nguoi that, doi lay viec cat
      * duong ke trom ngay.
+     *
+     * <p>
+     * ⚠️ CO Y KHONG CO @Transactional. Day la ket luan sau hai lan sua sai.
+     *
+     * <p>
+     * Lan 1: co @Transactional, va lenh thu hoi family bi rollback cuon di boi chinh dong
+     * throw ngay sau no. Chua bang cach tach ra mot bean REQUIRES_NEW.
+     *
+     * <p>
+     * Lan 2: REQUIRES_NEW lai <b>tu chan chinh transaction ngoai cua no</b> - cung mot bang,
+     * cung nhung dong do. Do that: {@code 55P03 canceling statement due to lock timeout,
+     * while updating tuple in relation "refresh_tokens"}, va nguoi dung nhan 500 sau 5 giay
+     * thay vi 401 ngay.
+     *
+     * <p>
+     * 📌 Ket luan dung: <b>don vi nguyen tu o day la MOT CAU UPDATE, khong phai ca method.</b>
+     * {@code claimForRotation()} tu no da phan xu duoc "ai la nguoi dau tien" - do la toan bo
+     * tinh nguyen tu can thiet. Boc them mot transaction quanh no khong mua duoc gi, ma them
+     * hai nguy co: rollback cuon mat lenh thu hoi, va tu chan chinh minh.
+     *
+     * <p>
+     * <b>Mot transaction khong tu dong an toan hon.</b> No chi dung khi co NHIEU lenh ghi phai
+     * cung song hoac cung chet - o day khong co.
+     *
+     * <p>
+     * Doi lai: neu {@code issue()} hong sau khi da gianh xong, token cu chet ma khong co token
+     * moi -> nguoi dung phai dang nhap lai. Hiem, va la huong hong AN TOAN (fail-closed).
      */
-    @Transactional
     public Rotated rotate(String presentedToken) {
         Optional<RefreshToken> found = tokens.findByHash(hash(presentedToken));
 
@@ -115,31 +138,42 @@ public class RefreshTokenService {
 
         RefreshToken t = found.get();
 
+        // Chan som cac ly do KHONG phai dau hieu tan cong: het han, hoac da bi thu hoi.
+        // Kiem truoc de khong lam on nhat ky bang nhung ca binh thuong.
+        if (t.revokedAt() != null || !Instant.now().isBefore(t.expiresAt())) {
+            throw new InvalidRefreshTokenException();
+        }
+
         // 🚨 DA DUNG ROI ma con duoc trinh ra lan nua -> co hai ban sao dang ton tai.
-        if (t.usedAt() != null) {
-            // Goi qua bean KHAC voi REQUIRES_NEW: dong duoi day nem exception, va neu lenh
-            // thu hoi nam trong cung transaction thi no bi rollback cuon di. Da do that,
-            // xem RefreshTokenRevoker.
-            int killed = revoker.revokeFamily(t.familyId());
+        //
+        // Hai duong vao nhanh nay:
+        //   1. doc thay used_at != null  -> ro rang, lan dung thu hai cach lan dau mot khoang
+        //   2. claimForRotation() tra 0  -> hai request DONG THOI, ca hai deu doc thay
+        //      "chua dung" nhung chi mot ben gianh duoc cau UPDATE
+        //
+        // Duong thu hai la duong da bo sot o ban dau, va da do that: hai lenh /refresh song
+        // song voi cung mot token -> CA HAI deu 200. Doc-roi-ghi khong bao gio du de phan xu
+        // chuyen "ai la nguoi dau tien" - dieu kien phai nam trong cau UPDATE.
+        if (t.usedAt() != null || tokens.claimForRotation(t.id()) == 0) {
+            // Goi THANG, khong qua bean REQUIRES_NEW: method nay khong co transaction nen
+            // lenh UPDATE tu commit ngay - khong co gi de rollback cuon di, va cung khong co
+            // transaction ngoai nao de tu chan chinh minh.
+            int killed = tokens.revokeFamily(t.familyId());
 
             log.warn("PHAT HIEN DUNG LAI refresh token cua user {} - thu hoi ca family {} ({} token)",
                     t.userId(), t.familyId(), killed);
 
             audit.record(AuditEvent.REFRESH_TOKEN_REUSED, t.userId(),
                     Map.of("familyId", t.familyId().toString(), "revokedCount", killed,
-                            "originallyUsedAt", t.usedAt().toString()));
+                            // Co the null o duong thu hai (hai request dong thoi): luc doc thi
+                            // chua ai dung, den luc ghi moi thua. Ghi ro de nguoi doc nhat ky
+                            // phan biet duoc hai kich ban.
+                            "detectedBy", t.usedAt() == null ? "CONCURRENT_CLAIM" : "SECOND_USE"));
 
             throw new InvalidRefreshTokenException();
         }
 
-        if (!t.isUsable(Instant.now())) {
-            // Het han hoac da bi thu hoi. Khong phai dau hieu tan cong - het han la chuyen
-            // binh thuong, con bi thu hoi thi hoac da dang xuat, hoac family da bi giet o
-            // nhanh tren.
-            throw new InvalidRefreshTokenException();
-        }
-
-        tokens.markUsed(t.id());
+        // Toi day: da gianh duoc quyen, va chi MOT request lam duoc dieu do.
         return new Rotated(t.userId(), issue(t.userId(), t.familyId()));
     }
 

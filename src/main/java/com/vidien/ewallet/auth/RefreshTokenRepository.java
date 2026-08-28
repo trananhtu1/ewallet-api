@@ -71,9 +71,26 @@ public class RefreshTokenRepository {
                 .optional();
     }
 
-    /** Danh dau da dung. Mot refresh token chi duoc doi lay token moi DUNG MOT LAN. */
-    public void markUsed(long id) {
-        db.sql("UPDATE refresh_tokens SET used_at = now() WHERE id = :id AND used_at IS NULL")
+    /**
+     * ⭐ GIANH quyen dung token nay. Tra ve 1 neu gianh duoc, 0 neu ai do gianh truoc roi.
+     *
+     * <p>
+     * Ten la "claim" chu khong phai "markUsed", vi day khong phai mot lenh ghi thu dong - no
+     * la <b>cong tac nguyen tu</b> quyet dinh ai duoc doi token.
+     *
+     * <p>
+     * Dieu kien {@code AND used_at IS NULL} nam NGAY TRONG cau UPDATE, khong phai kiem o Java
+     * roi moi ghi. Doc-roi-ghi o day co mot khe ho, va da do that: hai request goi /refresh
+     * cung luc voi cung mot token thi <b>ca hai deu doc thay "chua dung"</b> va ca hai deu
+     * duoc doi - tuc la co che phat hien dung lai khong no dung luc can nhat.
+     *
+     * <p>
+     * 📌 Cung mot hinh dang voi {@code subtractFromBalance} tra ve 0 khi khong du tien, va voi
+     * bai hoc "20 lenh chuyen tien cung luc" hom 27/08: <b>dieu kien phai nam trong cau UPDATE
+     * thi database moi la nguoi phan xu.</b>
+     */
+    public int claimForRotation(long id) {
+        return db.sql("UPDATE refresh_tokens SET used_at = now() WHERE id = :id AND used_at IS NULL")
                 .param("id", id)
                 .update();
     }
