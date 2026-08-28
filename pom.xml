@@ -19,6 +19,27 @@
 		<mapstruct.version>1.6.3</mapstruct.version>
 	</properties>
 
+	<!--
+	  spring-boot-dependencies KHONG quan version cua Testcontainers, nen phai nhap BOM rieng.
+	  Nhap BOM chu khong go version vao tung dependency: mot cho khai bao, va cac artifact cua
+	  Testcontainers luon khop version nhau - lech version giua chung la mot loai loi rat kho
+	  doc vi no vo o luc chay chu khong luc bien dich.
+
+	  Cung bai hoc voi luc chon thu vien JWT hom 27/08: uu tien thu co BOM quan, de nang mot
+	  cai la ca ho di theo.
+	-->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers-bom</artifactId>
+				<version>1.21.3</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -95,6 +116,29 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- Testcontainers: dung mot Postgres THAT trong Docker cho tung lan chay test.
+		     Khong dung H2 - va day khong phai so thich:
+
+		     H2 khong co FOR NO KEY UPDATE, khong co JSONB, khong co UNION ALL voi LIMIT trong
+		     nhanh con, va khong tai hien duoc deadlock. Tuc la no khong chay duoc dung nhung
+		     thu can canh giu nhat. Test tren mot database KHAC voi production la test mot he
+		     thong khac. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -121,6 +165,33 @@
 			     chay truoc Lombok thi luc do entity CHUA CO getter nao - va thong bao loi
 			     se la "Unknown property in result type" chu khong phai "thieu Lombok",
 			     tro vao dung cai truong minh vua khai bao. -->
+			<!--
+			  ⚠️ Thieu plugin nay thi cac lop *IT KHONG BAO GIO CHAY, va build van xanh.
+
+			  Surefire (chay o `mvn test`) chi nhan *Test, Test*, *Tests, *TestCase. Cac lop
+			  ket thuc bang *IT thuoc ve Failsafe va chi chay o `mvn verify`. Do la quy uoc
+			  chuan cua Maven, va ly do co that: unit test phai chay trong vai giay o moi lan
+			  build, con integration test can Docker va mat lau hon nhieu - tron chung thi
+			  hoac vong lap phat trien cham lai, hoac nguoi ta bat dau bo qua test.
+
+			  📌 Va day dung la loai loi im lang da gap bon lan trong project: khai bao mot thu
+			  ma thieu cai kich hoat no. Viet 4 integration test rat ky, chay `mvn test`, thay
+			  BUILD SUCCESS - va khong mot dong nao trong so do tung duoc thuc thi.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<!-- verify PHAI co: thieu no thi test do van khong lam do build. -->
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
