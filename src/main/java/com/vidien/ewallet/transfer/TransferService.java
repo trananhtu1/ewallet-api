@@ -1,11 +1,14 @@
 package com.vidien.ewallet.transfer;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.vidien.ewallet.audit.AuditEvent;
+import com.vidien.ewallet.audit.Auditor;
 import com.vidien.ewallet.transaction.Transaction;
 import com.vidien.ewallet.transaction.TransactionRepository;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
@@ -26,12 +29,14 @@ public class TransferService {
     private final WalletRepository wallets;
     private final TransactionRepository transactions;
     private final FailedTransferRecorder failedTransfers;
+    private final Auditor audit;
 
     public TransferService(WalletRepository wallets, TransactionRepository transactions,
-            FailedTransferRecorder failedTransfers) {
+            FailedTransferRecorder failedTransfers, Auditor audit) {
         this.wallets = wallets;
         this.transactions = transactions;
         this.failedTransfers = failedTransfers;
+        this.audit = audit;
     }
 
     @Transactional
@@ -46,6 +51,16 @@ public class TransferService {
         // Kiem TRUOC MOI THU: truoc ca lockById. Khoa mot dong vi cua nguoi khac dù chi trong
         // vai mili giay cung la de mot nguoi la chan duong giao dich that cua ho.
         if (fromWalletId != callerWalletId) {
+            // ⭐ Su kien dang gia nhat cua ca he thong nhat ky. So cai KHONG co dong nao cho
+            // viec nay - dung, vi khong dong tien nao chay. Nhung neu khong ghi o day thi
+            // khong co bat cu dau vet nao rang co nguoi vua co gang rut vi nguoi khac.
+            //
+            // Va ghi duoc la nho REQUIRES_NEW: dong nem ngay duoi day lam rollback ca
+            // transaction nay.
+            audit.record(AuditEvent.ACCESS_DENIED, callerWalletId,
+                    Map.of("claimedWalletId", fromWalletId, "callerWalletId", callerWalletId,
+                            "action", "TRANSFER"));
+
             throw new NotYourWalletException(fromWalletId, callerWalletId);
         }
 
@@ -110,6 +125,14 @@ public class TransferService {
             //   WALLET_NOT_FOUND -> khoa ngoai tu choi mot vi khong ton tai
             //   NOT_YOUR_WALLET  -> khong phai mot lan chuyen tien, la mot lan bi tu choi quyen
             failedTransfers.record(fromWalletId, toWalletId, amount);
+
+            // So cai ghi "co mot lan chuyen 99999 that bai". Nhat ky ghi them LY DO va
+            // SO DU LUC DO - hai thu so cai khong cho cho, va la hai thu can nhat khi
+            // khach hang goi len hoi "sao lenh cua toi khong chay".
+            audit.record(AuditEvent.TRANSFER_REJECTED, callerWalletId,
+                    Map.of("from", fromWalletId, "to", toWalletId, "amount", amount.toString(),
+                            "reason", "INSUFFICIENT_FUNDS",
+                            "balanceAtTime", from.balance().toString()));
 
             throw new InsufficientFundsException(fromWalletId, from.balance(), amount);
         }
