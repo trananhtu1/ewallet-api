@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.vidien.ewallet.transaction.TransactionRepository;
 import com.vidien.ewallet.wallet.InsufficientFundsException;
@@ -23,10 +24,13 @@ public class TransferService {
 
     private final WalletRepository wallets;
     private final TransactionRepository transactions;
+    private final FailedTransferRecorder failedTransfers;
 
-    public TransferService(WalletRepository wallets, TransactionRepository transactions) {
+    public TransferService(WalletRepository wallets, TransactionRepository transactions,
+            FailedTransferRecorder failedTransfers) {
         this.wallets = wallets;
         this.transactions = transactions;
+        this.failedTransfers = failedTransfers;
     }
 
     @Transactional
@@ -72,6 +76,17 @@ public class TransferService {
                 .orElseThrow(() -> new WalletNotFoundException(toWalletId));
 
         if (from.balance().compareTo(amount) < 0) {
+            // Ghi vet vao so cai TRUOC khi nem. Goi qua mot BEAN KHAC chu khong phai
+            // this.something() - neu khong, @Transactional(REQUIRES_NEW) khong ai doc va
+            // dong nay bien mat cung transaction dang bi rollback. Da do: 0 dong.
+            //
+            // Chi ghi vet cho INSUFFICIENT_FUNDS. Ba loi con lai KHONG ghi, va deu co ly do
+            // tu rang buoc trong V1 chu khong phai tuy chon:
+            //   SAME_WALLET      -> ck_transactions_endpoints doi hai dau PHAI khac nhau
+            //   WALLET_NOT_FOUND -> khoa ngoai tu choi mot vi khong ton tai
+            //   NOT_YOUR_WALLET  -> khong phai mot lan chuyen tien, la mot lan bi tu choi quyen
+            failedTransfers.record(fromWalletId, toWalletId, amount);
+
             throw new InsufficientFundsException(fromWalletId, from.balance(), amount);
         }
 
@@ -89,4 +104,5 @@ public class TransferService {
         return wallets.findById(fromWalletId)
                 .orElseThrow(() -> new WalletNotFoundException(fromWalletId));
     }
+
 }

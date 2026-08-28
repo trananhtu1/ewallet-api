@@ -68,9 +68,40 @@ public class WalletRepository {
      * nguoc chieu nhau (1->2 va 2->1) chay cung luc, moi ben khoa mot vi roi cho ben kia, se
      * deadlock. Postgres phat hien duoc va giet mot ben, nhung nguoi dung ben do an loi 500
      * ma khong hieu vi sao. Khoa theo thu tu co dinh thi tinh huong do khong ton tai.
+     *
+     * <p>
+     * ⭐ FOR NO KEY UPDATE chu KHONG phai FOR UPDATE - mot tu, va thieu no thi treo ca request.
+     *
+     * <p>
+     * Postgres co bon muc khoa DONG. Bang xung dot cua chung:
+     *
+     * <pre>
+     *                        | KEY SHARE | SHARE | NO KEY UPDATE | UPDATE
+     *   FOR KEY SHARE        |     -     |   -   |       -       |   X
+     *   FOR NO KEY UPDATE    |     -     |   X   |       X       |   X
+     *   FOR UPDATE           |     X     |   X   |       X       |   X
+     * </pre>
+     *
+     * Cho dat: khi INSERT mot dong co KHOA NGOAI, Postgres phai kiem dong cha con song khong,
+     * va no lam viec do bang cach lay khoa <b>FOR KEY SHARE</b> tren dong cha. Nhin bang tren:
+     * FOR KEY SHARE xung dot voi dung MOT muc, va do la FOR UPDATE.
+     *
+     * <p>
+     * Nen ban cu (FOR UPDATE) chan luon chinh minh: transaction ngoai khoa hai dong vi, roi
+     * goi FailedTransferRecorder ghi mot dong so cai co khoa ngoai tro vao hai dong do. Lenh
+     * INSERT phai doi, ma nguoi giu khoa lai la ke dang doi no. Do that tren app that:
+     * <b>HTTP 500 sau 5.74 giay</b>, SQLSTATE 55P03 - va 5.74s do la vi co lock_timeout, khong
+     * co thi treo vinh vien. Postgres KHONG bao deadlock, vi transaction ngoai khong cho mot
+     * khoa nao ca - no cho mot loi goi Java.
+     *
+     * <p>
+     * FOR NO KEY UPDATE khong xung dot voi FOR KEY SHARE nen lenh INSERT di qua. Va no
+     * <b>khong mat mot chut an toan nao</b>: hai lenh FOR NO KEY UPDATE tren cung mot dong VAN
+     * chan nhau (do that: 55P03), nen hai lenh chuyen tien song song van xep hang dung nhu cu.
+     * Cai duy nhat no cho qua la viec kiem khoa ngoai - thu chi doc chu khong sua dong vi.
      */
     public void lockById(long walletId) {
-        db.sql("SELECT id FROM wallets WHERE id = :id FOR UPDATE")
+        db.sql("SELECT id FROM wallets WHERE id = :id FOR NO KEY UPDATE")
                 .param("id", walletId)
                 .query(Long.class)
                 .optional();

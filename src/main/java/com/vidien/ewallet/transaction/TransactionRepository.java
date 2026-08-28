@@ -56,6 +56,25 @@ public class TransactionRepository {
     }
 
     /**
+     * Ghi mot lan chuyen tien THAT BAI vao so cai.
+     *
+     * <p>
+     * Cot status dat ra tu V1 de luu 'FAILED', nhung mai den gio moi dung duoc: dong nay phai
+     * ghi trong MOT TRANSACTION KHAC, neu khong no nam trong chinh transaction dang bi rollback
+     * va bien mat cung. Xem FailedTransferRecorder.
+     */
+    public void insertFailedTransfer(long fromWalletId, long toWalletId, BigDecimal amount) {
+        db.sql("""
+                INSERT INTO transactions (from_wallet_id, to_wallet_id, amount, type, status)
+                VALUES (:fromWalletId, :toWalletId, :amount, 'TRANSFER', 'FAILED')
+                """)
+                .param("fromWalletId", fromWalletId)
+                .param("toWalletId", toWalletId)
+                .param("amount", amount)
+                .update();
+    }
+
+    /**
      * Lich su cua mot vi: ca tien vao lan tien ra, moi nhat truoc.
      *
      * <p>
