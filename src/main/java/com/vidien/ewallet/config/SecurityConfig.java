@@ -12,9 +12,16 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import java.util.List;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -68,11 +75,54 @@ public class SecurityConfig {
         return new NimbusJwtEncoder(new ImmutableSecret<>(signingKey(secret)));
     }
 
+    /** Ten nguoi phat hanh token. Dung o CA HAI dau: luc ky (AuthService) va luc kiem (day). */
+    public static final String ISSUER = "ewallet-api";
+
+    /**
+     * ⚠️ CHU KY DUNG KHONG CO NGHIA LA TOKEN NAY DANH CHO MINH.
+     *
+     * <p>
+     * Ban dau o day chi co withSecretKey().macAlgorithm().build(). Mac dinh cua Nimbus chi kiem
+     * hai thu: chu ky, va han su dung. KHONG kiem `iss`, KHONG kiem `aud`.
+     *
+     * <p>
+     * Da do that: tu ky mot token bang chinh khoa nay nhung dat
+     * {@code "iss": "ke-tan-cong-tu-phat"} kem mot claim bia {@code "role": "ADMIN"} ->
+     * {@code GET /api/wallets/me} tra ve <b>200</b> kem so du that.
+     *
+     * <p>
+     * 📌 Noi cho dung muc do nghiem trong: ke tan cong phai co khoa bi mat moi ky duoc, nen
+     * hang rao THU NHAT van la giu khoa. Nhung co it nhat hai tinh huong RAT HAY GAP ma khoa
+     * bi dung chung mot cach hop phap, va luc do dong nay la thu duy nhat con dung:
+     *
+     * <ul>
+     * <li><b>Staging va production dat cung JWT_SECRET.</b> Chuyen thuong xay ra vi tien.
+     * Khong co dong nay thi token lay tu staging goi thang vao production duoc.
+     * <li><b>Cung mot khoa dung cho viec khac</b> - token doi mat khau, token xac nhan email,
+     * link moi. Khong co dong nay thi mot token dat lai mat khau tro thanh mot the ra vao API.
+     * </ul>
+     *
+     * <p>
+     * Va day chinh la thu OAuth2 BAT BUOC resource server phai lam: kiem `iss` de biet AI phat
+     * hanh, kiem `aud` de biet token nay danh cho AI. Chu ky chi tra loi "co bi sua khong".
+     */
     @Bean
     JwtDecoder jwtDecoder(@Value("${app.jwt.secret}") String secret) {
-        return NimbusJwtDecoder.withSecretKey(signingKey(secret))
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(signingKey(secret))
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+
+        // createDefaultWithIssuer = kiem han su dung (nhu mac dinh) + kiem iss.
+        OAuth2TokenValidator<Jwt> issuerAndTime = JwtValidators.createDefaultWithIssuer(ISSUER);
+
+        // aud khong co san trong bo kiem cua Spring nen phai tu viet. Mot dong, va no la
+        // cau tra loi cho "token nay duoc phat cho DICH VU nao" - hom nay chi co mot dich vu,
+        // nhung ngay tach service ra thi thieu no la token cua dich vu A dung duoc o dich vu B.
+        OAuth2TokenValidator<Jwt> audience = new JwtClaimValidator<List<String>>(
+                JwtClaimNames.AUD, aud -> aud != null && aud.contains(ISSUER));
+
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(issuerAndTime, audience));
+        return decoder;
     }
 
     @Bean

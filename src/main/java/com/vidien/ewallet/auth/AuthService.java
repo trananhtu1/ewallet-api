@@ -2,6 +2,7 @@ package com.vidien.ewallet.auth;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -11,6 +12,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.vidien.ewallet.config.SecurityConfig;
 import com.vidien.ewallet.user.User;
 import com.vidien.ewallet.user.UserRepository;
 import com.vidien.ewallet.wallet.WalletRepository;
@@ -87,7 +89,14 @@ public class AuthService {
         Instant now = Instant.now();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer("ewallet-api")
+                // iss va aud lay tu HANG SO trong SecurityConfig, khong go tay chuoi o hai
+                // noi. Go tay thi mot ngay nao do sua mot dau roi quen dau kia, va trieu
+                // chung se la "moi nguoi dung bong dung bi 401" - dung luc deploy.
+                .issuer(SecurityConfig.ISSUER)
+                // aud = "token nay duoc phat cho DICH VU nao". Hom nay chi co mot dich vu nen
+                // no bang chinh iss. Ngay tach service ra, day la thu ngan token cua dich vu
+                // nay dung duoc o dich vu kia.
+                .audience(List.of(SecurityConfig.ISSUER))
                 .issuedAt(now)
                 .expiresAt(now.plus(tokenTtl))
                 // subject la "token nay noi ve AI". Dung id chu khong dung email: email co
