@@ -3,6 +3,8 @@ package com.vidien.ewallet.auth;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -12,6 +14,8 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.vidien.ewallet.audit.AuditEvent;
+import com.vidien.ewallet.audit.Auditor;
 import com.vidien.ewallet.config.SecurityConfig;
 import com.vidien.ewallet.user.User;
 import com.vidien.ewallet.user.UserRepository;
@@ -25,15 +29,17 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final Duration tokenTtl;
+    private final Auditor audit;
 
     public AuthService(UserRepository users, WalletRepository wallets,
             PasswordEncoder passwordEncoder, JwtEncoder jwtEncoder,
-            @Value("${app.jwt.ttl:PT2H}") Duration tokenTtl) {
+            @Value("${app.jwt.ttl:PT2H}") Duration tokenTtl, Auditor audit) {
         this.users = users;
         this.wallets = wallets;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.tokenTtl = tokenTtl;
+        this.audit = audit;
     }
 
     /**
@@ -57,17 +63,38 @@ public class AuthService {
         long userId = users.insert(request.email(), hash, request.fullName());
         long walletId = wallets.insertForUser(userId);
 
+        audit.record(AuditEvent.REGISTERED, userId,
+                Map.of("email", request.email(), "walletId", walletId));
+
         return issueToken(userId, request.email(), request.fullName(), walletId);
     }
 
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
-        User user = users.findByEmail(request.email())
-                .orElseThrow(InvalidCredentialsException::new);
+        Optional<User> found = users.findByEmail(request.email());
+
+        if (found.isEmpty()) {
+            // Ghi nhat ky RIENG cho "email khong ton tai" va "sai mat khau" - nhung CHI trong
+            // nhat ky. Response ra ngoai van la MOT thong bao duy nhat (401 INVALID_CREDENTIALS),
+            // vi tach ra la tang ke tan cong cong cu do xem email nao co that.
+            //
+            // Nhat ky thi nguoc lai: no danh cho NGUOI VAN HANH, va nguoi van hanh can phan
+            // biet. 50 lan "khong ton tai" tu mot IP la quet danh sach email; 50 lan "sai mat
+            // khau" tren MOT email la do mat khau. Hai chuyen khac han nhau.
+            audit.record(AuditEvent.LOGIN_FAILED, null,
+                    Map.of("email", request.email(), "reason", "NO_SUCH_EMAIL"));
+            throw new InvalidCredentialsException();
+        }
+
+        User user = found.get();
 
         // matches() doc salt tu chinh cai hash roi bam lai mat khau vua nhap de so.
         // KHONG BAO GIO dung equals() - bam cung mot mat khau hai lan ra hai chuoi khac nhau.
         if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
+            // KHONG BAO GIO ghi mat khau vua nhap vao nhat ky, ke ca dang bam. Nhat ky la
+            // thu duoc doc nhieu nhat va bao ve it nhat trong ca he thong.
+            audit.record(AuditEvent.LOGIN_FAILED, user.id(),
+                    Map.of("email", request.email(), "reason", "WRONG_PASSWORD"));
             throw new InvalidCredentialsException();
         }
 
