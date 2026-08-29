@@ -40,19 +40,13 @@ class TransferConcurrencyIT extends PostgresIT {
     private WalletService walletService;
     @Autowired
     private UserRepository users;
-    @Autowired
-    private JdbcClient db;
 
     private long viA;
     private long viB;
 
     @BeforeEach
     void dungDuLieu() {
-        db.sql("DELETE FROM transactions").update();
-        db.sql("DELETE FROM audit_log").update();
-        db.sql("DELETE FROM refresh_tokens").update();
-        db.sql("DELETE FROM wallets").update();
-        db.sql("DELETE FROM users").update();
+        xoaHetDuLieu();
 
         viA = taoVi("a@test.com", "100000.00");
         viB = taoVi("b@test.com", "100000.00");

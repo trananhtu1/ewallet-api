@@ -1,6 +1,8 @@
 package com.vidien.ewallet.support;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -91,6 +93,38 @@ public abstract class PostgresIT {
      * JWT_SECRET la bat buoc luc khoi dong (co y - xem application.properties), nen phai cap
      * mot gia tri o day. 32 ky tu vi HS256 doi it nhat the.
      */
+    @Autowired
+    protected JdbcClient db;
+
+    /**
+     * Xoa sach du lieu nghiep vu, dung THU TU khoa ngoai cho phep.
+     *
+     * <p>
+     * ⚠️ <b>Ham nay o day chu khong copy vao tung file test, va do la mot bai hoc phai tra gia
+     * moi rut ra.</b> Truoc do bon file IT moi file mot ban sao cua danh sach DELETE. Them bang
+     * {@code kyc_submissions} o V7 lam <b>hai muoi</b> test do cung mot luc:
+     *
+     * <pre>
+     * DELETE FROM users
+     *   ERROR: update or delete on table "users" violates foreign key constraint
+     *          "kyc_submissions_user_id_fkey"
+     * </pre>
+     *
+     * Bang moi thi chi mot file biet, ba file kia khong. Gio them bang la sua o day, mot lan.
+     *
+     * <p>
+     * 📌 Thu tu KHONG duoc doi tuy tien: bang con truoc, bang cha sau. {@code users} phai la
+     * dong cuoi cung vi moi bang khac deu tro toi no.
+     */
+    protected void xoaHetDuLieu() {
+        db.sql("DELETE FROM kyc_submissions").update();
+        db.sql("DELETE FROM transactions").update();
+        db.sql("DELETE FROM audit_log").update();
+        db.sql("DELETE FROM refresh_tokens").update();
+        db.sql("DELETE FROM wallets").update();
+        db.sql("DELETE FROM users").update();
+    }
+
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
         registry.add("app.jwt.secret", () -> "khoa-test-32-ky-tu-toi-thieu-cho-HS256");
