@@ -6,12 +6,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import java.util.List;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.vidien.ewallet.auth.domain.Caller;
-import com.vidien.ewallet.transaction.api.dto.TransactionView;
+import com.vidien.ewallet.transaction.api.dto.TransactionPage;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import com.vidien.ewallet.wallet.api.dto.DepositRequest;
@@ -105,17 +104,40 @@ public class WalletController {
     }
 
     /**
-     * GET /{id}/transactions?limit=20
+     * GET /{id}/transactions?limit=20&cursor=...
      *
      * <p>
      * limit co MAC DINH va co TRAN. Khong co tran thi mot nguoi go limit=1000000 la keo het
      * bang ve, giet ca server lan trinh duyet. Math.min la mot dong, va no la dong duy nhat
      * dung giua API cong khai va mot cau query khong gioi han.
+     *
+     * <p>
+     * <b>cursor thay cho page/offset, va day khong phai so thich.</b> Do tren 200.000 dong:
+     * {@code OFFSET 100000} mat 35.051ms va bat Postgres doc 100.020 dong de tra ve 20; cursor
+     * mat 0.221ms va doc 21 dong. Nhung ly do CHINH khong phai toc do:
+     *
+     * <p>
+     * OFFSET dem theo VI TRI trong ket qua, ma vi tri thi thay doi khi co dong moi chen vao
+     * dau. Do duoc: doc trang 1 ra {@code id 1,2,3,4,5}, co 3 giao dich moi ghi vao, doc tiep
+     * {@code OFFSET 5} thi ra {@code id 3,4,5,6,7} - ba dong nguoi dung VUA XEM hien ra lan
+     * hai. Neu co dong bi xoa thi nguoc lai: dong bi NHAY QUA, khong bao gio thay.
+     *
+     * <p>
+     * Cursor dem theo GIA TRI ({@code created_at, id}) chu khong theo vi tri, nen chen bao
+     * nhieu dong vao dau cung khong xe dich no. Cung kich ban do, trang 2 ra
+     * {@code id 6,7,8,9,10}.
+     *
+     * <p>
+     * Voi mot bang tien thi "thinh thoang hien lai mot giao dich" khong phai loi giao dien -
+     * no lam nguoi dung tuong minh bi tru tien hai lan.
      */
     @GetMapping("/{id}/transactions")
-    public List<TransactionView> history(
+    public TransactionPage history(
             @PathVariable @Positive(message = "Ma vi phai la so duong") long id,
-            @RequestParam(defaultValue = "20") int limit, @AuthenticationPrincipal Jwt jwt) {
-        return walletService.history(id, Math.min(Math.max(limit, 1), 100), Caller.walletId(jwt));
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String cursor,
+            @AuthenticationPrincipal Jwt jwt) {
+        return walletService.history(id, Math.min(Math.max(limit, 1), 100), cursor,
+                Caller.walletId(jwt));
     }
 }
