@@ -212,6 +212,25 @@ public class GlobalExceptionHandler {
          * file, nhung day la lan thu ba trong project mot exception co y nghia bi luoi chan
          * cuoi ha thanh 500. Ghi lai o day de lan sau con nho kiem.
          */
+        /**
+         * Tham so query sai gia tri -> 400.
+         *
+         * <p>
+         * Hien chi co mot cho nem: {@code direction} khac IN/OUT. Khong bat o day thi luoi
+         * {@code Exception.class} ben duoi ha no thanh 500 - lan thu BA trong project mot loi
+         * co y nghia bi luoi chan cuoi nuot mat.
+         */
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(400, "INVALID_PARAMETER",
+                                e.getMessage(), request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+
         @ExceptionHandler(InvalidCursorException.class)
         public ResponseEntity<ErrorResponse> handleInvalidCursor(InvalidCursorException e,
                         HttpServletRequest request) {

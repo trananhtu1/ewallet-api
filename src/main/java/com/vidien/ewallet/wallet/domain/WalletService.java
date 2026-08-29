@@ -6,10 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import com.vidien.ewallet.transaction.infra.TransactionRepository;
+import com.vidien.ewallet.transaction.infra.TransactionSearchRepository;
 import com.vidien.ewallet.transaction.domain.Transaction;
 import com.vidien.ewallet.transaction.domain.TransactionStatus;
 import com.vidien.ewallet.transaction.domain.TransactionType;
 import com.vidien.ewallet.transaction.api.dto.TransactionCursor;
+import com.vidien.ewallet.transaction.api.dto.TransactionFilter;
 import com.vidien.ewallet.transaction.api.dto.TransactionPage;
 import com.vidien.ewallet.transaction.api.dto.TransactionView;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
@@ -39,13 +41,16 @@ public class WalletService {
 
     private final WalletRepository wallets;
     private final TransactionRepository transactions;
+    private final TransactionSearchRepository search;
     private final WalletCache cache;
     private final ApplicationEventPublisher events;
 
     public WalletService(WalletRepository wallets, TransactionRepository transactions,
-            WalletCache cache, ApplicationEventPublisher events) {
+            TransactionSearchRepository search, WalletCache cache,
+            ApplicationEventPublisher events) {
         this.wallets = wallets;
         this.transactions = transactions;
+        this.search = search;
         this.cache = cache;
         this.events = events;
     }
@@ -181,7 +186,8 @@ public class WalletService {
      * @param cursor moc client cam ve tu lan goi truoc; {@code null} nghia la trang dau
      */
     @Transactional(readOnly = true)
-    public TransactionPage history(long walletId, int limit, String cursor, long callerWalletId) {
+    public TransactionPage history(long walletId, int limit, String cursor,
+            TransactionFilter loc, long callerWalletId) {
         requireOwn(walletId, callerWalletId);
 
         if (wallets.findById(walletId).isEmpty()) {
@@ -191,13 +197,14 @@ public class WalletService {
         // Xin thua MOT dong de biet con trang sau hay khong. Dong nay bi vut ngay duoi day.
         int xin = limit + 1;
 
-        List<Transaction> rows;
-        if (cursor == null || cursor.isBlank()) {
-            rows = transactions.findFirstPage(walletId, xin);
-        } else {
-            TransactionCursor moc = TransactionCursor.decode(cursor);
-            rows = transactions.findAfterCursor(walletId, moc.createdAt(), moc.id(), xin);
-        }
+        // ⚠️ Cursor duoc giai o DAY chu khong o repository. Mot cursor hong la loi cua NGUOI
+        // GOI (400), con repository thi chi biet ve SQL - de no nem loi ve dinh dang chuoi la
+        // tron trach nhiem sang mot tang khong co ngu canh de tra loi cho dung.
+        TransactionCursor moc = (cursor == null || cursor.isBlank())
+                ? null
+                : TransactionCursor.decode(cursor);
+
+        List<Transaction> rows = search.search(walletId, loc, moc, xin);
 
         if (rows.isEmpty()) {
             return TransactionPage.empty();
