@@ -49,6 +49,19 @@ public enum AuditEvent {
     KYC_SUBMITTED,
 
     /**
+     * Doi soat cuoi ngay phat hien so du KHONG khop so cai.
+     *
+     * <p>
+     * Su kien nghiem trong nhat trong ca danh sach nay. Moi su kien khac noi ve MOT nguoi dung;
+     * cai nay noi rang <b>ca he thong</b> dang giu mot con so khong giai thich duoc.
+     *
+     * <p>
+     * Payload mang du ba con so (tong vi, tong so cai, hieu) va so vi lech - de nguoi doc nhat
+     * ky tra loi duoc "lech bao nhieu, o dau" ma khong phai chay lai job.
+     */
+    RECONCILIATION_DRIFT,
+
+    /**
      * 🚨 Mot refresh token DA DUNG ROI duoc trinh ra lan nua - nghia la co HAI ban sao dang
      * ton tai. Su kien nghiem trong nhat trong danh sach nay: no khong the xay ra o mot
      * client hoat dong binh thuong.

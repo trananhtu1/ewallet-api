@@ -122,6 +122,7 @@ public abstract class PostgresIT {
      * dong cuoi cung vi moi bang khac deu tro toi no.
      */
     protected void xoaHetDuLieu() {
+        db.sql("DELETE FROM reconciliation_runs").update();
         db.sql("DELETE FROM kyc_submissions").update();
         db.sql("DELETE FROM transactions").update();
         db.sql("DELETE FROM audit_log").update();
@@ -138,6 +139,13 @@ public abstract class PostgresIT {
         // Cache BAT trong test. Mac dinh cua app la `none` (xem application.properties) vi
         // Render chua co Redis - nhung test ma chay voi cache tat thi no dang canh giu mot
         // duong khac han duong that.
+        // ⚠️ TAT job doi soat trong test. No chay theo lich, nen neu bat thi giua chung mot
+        // test nao do no se quet hai bang dung luc test dang dung du lieu - va ket qua doi
+        // theo thoi diem. Do la dinh nghia cua mot test flaky.
+        //
+        // ReconciliationIT goi thang service thay vi doi toi gio.
+        registry.add("app.reconciliation.enabled", () -> "false");
+
         registry.add("spring.cache.type", () -> "redis");
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
