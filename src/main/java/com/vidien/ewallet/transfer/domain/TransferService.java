@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 import com.vidien.ewallet.audit.domain.AuditEvent;
 import com.vidien.ewallet.audit.domain.Auditor;
@@ -17,6 +18,7 @@ import com.vidien.ewallet.wallet.domain.exception.InsufficientFundsException;
 import com.vidien.ewallet.wallet.domain.exception.NotYourWalletException;
 import com.vidien.ewallet.wallet.domain.exception.SameWalletTransferException;
 import com.vidien.ewallet.wallet.domain.Wallet;
+import com.vidien.ewallet.wallet.domain.WalletChangedEvent;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
 import com.vidien.ewallet.wallet.infra.WalletRepository;
 
@@ -32,13 +34,16 @@ public class TransferService {
     private final TransactionRepository transactions;
     private final FailedTransferRecorder failedTransfers;
     private final Auditor audit;
+    private final ApplicationEventPublisher events;
 
     public TransferService(WalletRepository wallets, TransactionRepository transactions,
-            FailedTransferRecorder failedTransfers, Auditor audit) {
+            FailedTransferRecorder failedTransfers, Auditor audit,
+            ApplicationEventPublisher events) {
         this.wallets = wallets;
         this.transactions = transactions;
         this.failedTransfers = failedTransfers;
         this.audit = audit;
+        this.events = events;
     }
 
     @Transactional
@@ -157,6 +162,15 @@ public class TransferService {
 
         log.info("Chuyen {} tu vi {} sang vi {}", amount, fromWalletId, toWalletId);
 
+        // ⚠️ HAI vi doi so du, nen phai xoa cache CA HAI. Quen mot ben la loi kinh dien nhat
+        // cua cache trong he thong tien: nguoi GUI thay so du moi ngay, nguoi NHAN nhin man
+        // hinh cu va tuong tien chua toi. Ho se goi len hoi, hoac te hon, ho se gui lai.
+        //
+        // Xoa xay ra sau khi commit (WalletCacheEvictor), khong phai ngay bay gio.
+        events.publishEvent(new WalletChangedEvent(fromWalletId));
+        events.publishEvent(new WalletChangedEvent(toWalletId));
+
+        // Doc thang repository chu khong qua cache: xoa cache dien ra SAU dong nay.
         return wallets.findById(fromWalletId)
                 .orElseThrow(() -> new WalletNotFoundException(fromWalletId));
     }
