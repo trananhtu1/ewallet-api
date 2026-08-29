@@ -44,8 +44,6 @@ class WalletCacheIT extends PostgresIT {
     @Autowired
     private UserRepository users;
     @Autowired
-    private JdbcClient db;
-    @Autowired
     private CacheManager cacheManager;
 
     private long viA;
@@ -78,11 +76,7 @@ class WalletCacheIT extends PostgresIT {
 
     @BeforeEach
     void dungDuLieu() {
-        db.sql("DELETE FROM transactions").update();
-        db.sql("DELETE FROM audit_log").update();
-        db.sql("DELETE FROM refresh_tokens").update();
-        db.sql("DELETE FROM wallets").update();
-        db.sql("DELETE FROM users").update();
+        xoaHetDuLieu();
 
         // Xoa tung khoa mot. Xem ghi chu o DA_TAO: clear() khong xoa duoc.
         DA_TAO.forEach(id -> cacheManager.getCache("wallet").evict(id));

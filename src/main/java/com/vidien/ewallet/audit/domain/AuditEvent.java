@@ -38,6 +38,17 @@ public enum AuditEvent {
     ACCESS_DENIED,
 
     /**
+     * Nguoi dung nop ho so KYC.
+     *
+     * <p>
+     * Payload mang HAI ma bam SHA-256 cua hai anh. So cai nghiep vu khong co cho cho chung, ma
+     * day dung la thu bo phan chong gian lan can: hai nguoi khac nhau nop CUNG MOT anh thi hai
+     * dong nhat ky nay trung nhau, va do la tin hieu manh nhat co the co ma khong can luu lai
+     * mot byte anh nao.
+     */
+    KYC_SUBMITTED,
+
+    /**
      * 🚨 Mot refresh token DA DUNG ROI duoc trinh ra lan nua - nghia la co HAI ban sao dang
      * ton tai. Su kien nghiem trong nhat trong danh sach nay: no khong the xay ra o mot
      * client hoat dong binh thuong.

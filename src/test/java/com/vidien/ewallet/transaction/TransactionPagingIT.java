@@ -42,19 +42,13 @@ class TransactionPagingIT extends PostgresIT {
     private WalletService walletService;
     @Autowired
     private UserRepository users;
-    @Autowired
-    private JdbcClient db;
 
     private long vi;
     private long viKia;
 
     @BeforeEach
     void dungDuLieu() {
-        db.sql("DELETE FROM transactions").update();
-        db.sql("DELETE FROM audit_log").update();
-        db.sql("DELETE FROM refresh_tokens").update();
-        db.sql("DELETE FROM wallets").update();
-        db.sql("DELETE FROM users").update();
+        xoaHetDuLieu();
 
         vi = taoVi("chu@test.com");
         viKia = taoVi("doi@test.com");

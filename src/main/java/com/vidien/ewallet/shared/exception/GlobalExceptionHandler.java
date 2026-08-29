@@ -16,6 +16,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.vidien.ewallet.auth.domain.exception.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.domain.exception.InvalidCredentialsException;
 import com.vidien.ewallet.auth.domain.exception.InvalidRefreshTokenException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import com.vidien.ewallet.kyc.domain.exception.InvalidDocumentException;
+import com.vidien.ewallet.kyc.domain.exception.KycAlreadyPendingException;
 import com.vidien.ewallet.transaction.domain.exception.InvalidCursorException;
 import com.vidien.ewallet.wallet.domain.exception.InsufficientFundsException;
 import com.vidien.ewallet.wallet.domain.exception.NotYourWalletException;
@@ -229,6 +232,60 @@ public class GlobalExceptionHandler {
                                 e.getMessage(), request.getRequestURI());
 
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+
+        /** Anh giay to khong hop le -> 400. Loi cua ben goi, va sua duoc bang cach chup lai. */
+        @ExceptionHandler(InvalidDocumentException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidDocument(InvalidDocumentException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(400, "INVALID_DOCUMENT",
+                                e.getMessage(), request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+
+        /**
+         * Da co ho so KYC dang cho -> 409.
+         *
+         * <p>
+         * KHONG phai 400: file gui len hoan toan hop le, chi la trang thai hien tai cua he
+         * thong khong cho phep. 400 se khien nguoi dung tuong minh chup anh sai va chup lai -
+         * vo ich. Cung ly do voi INSUFFICIENT_FUNDS.
+         */
+        @ExceptionHandler(KycAlreadyPendingException.class)
+        public ResponseEntity<ErrorResponse> handleKycPending(KycAlreadyPendingException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(409, "KYC_ALREADY_PENDING",
+                                "Bạn đã có hồ sơ đang chờ duyệt", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
+
+        /**
+         * File vuot qua gioi han -> 413.
+         *
+         * <p>
+         * ⚠️ Ngoai le nay duoc nem o TANG SERVLET, truoc khi controller chay mot dong nao. Do
+         * la co y: doc het mot file 2GB len RAM roi moi bao "qua lon" la mot duong tan cong
+         * bang chinh tinh nang cua minh.
+         *
+         * <p>
+         * 413 chu khong 400: co ma HTTP rieng cho dung chuyen nay, va client tu dong (app di
+         * dong) re nhanh theo ma chu khong doc chu tieng Viet.
+         */
+        @ExceptionHandler(MaxUploadSizeExceededException.class)
+        public ResponseEntity<ErrorResponse> handleTooLarge(MaxUploadSizeExceededException e,
+                        HttpServletRequest request) {
+                log.warn("File qua lon tai {}", request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(413, "FILE_TOO_LARGE",
+                                "Ảnh vượt quá dung lượng cho phép", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(body);
         }
 
         @ExceptionHandler(InvalidCursorException.class)
