@@ -10,7 +10,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.vidien.ewallet.auth.domain.Caller;
+import java.time.Instant;
+import com.vidien.ewallet.transaction.api.dto.TransactionFilter;
 import com.vidien.ewallet.transaction.api.dto.TransactionPage;
+import com.vidien.ewallet.transaction.domain.TransactionStatus;
+import com.vidien.ewallet.transaction.domain.TransactionType;
+import org.springframework.format.annotation.DateTimeFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import com.vidien.ewallet.wallet.api.dto.DepositRequest;
@@ -136,8 +141,44 @@ public class WalletController {
             @PathVariable @Positive(message = "Ma vi phai la so duong") long id,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) TransactionType type,
+            @RequestParam(required = false) TransactionStatus status,
+            @RequestParam(required = false) String direction,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @AuthenticationPrincipal Jwt jwt) {
-        return walletService.history(id, Math.min(Math.max(limit, 1), 100), cursor,
+
+        TransactionFilter loc = new TransactionFilter(type, status, chuanHoaHuong(direction),
+                from, to);
+
+        return walletService.history(id, Math.min(Math.max(limit, 1), 100), cursor, loc,
                 Caller.walletId(jwt));
+    }
+
+    /**
+     * Kiem {@code direction} va tra ve dang chuan, hoac nem 400.
+     *
+     * <p>
+     * {@code type} va {@code status} la enum nen Spring tu kiem: gui rac vao thi
+     * {@code MethodArgumentTypeMismatchException} -> 400, handler da co san. {@code direction}
+     * thi khong phai enum trong domain - no la mot goc nhin, khong phai mot cot - nen phai kiem
+     * tay.
+     *
+     * <p>
+     * ⚠️ Va phai kiem THAT. Bo dong nay di thi {@code ?direction=xyz} lang le duoc coi nhu
+     * "khong loc" va tra ve ca hai chieu - <b>dung dinh dang, sai y nghia</b>, dung ho loi voi
+     * cursor hong tra ve trang dau. Nguoi dung loc mot dang va nhan ve mot dang khac, khong mot
+     * dau hieu nao.
+     */
+    private static String chuanHoaHuong(String direction) {
+        if (direction == null || direction.isBlank()) {
+            return null;
+        }
+        String hoa = direction.trim().toUpperCase();
+        if (!hoa.equals("IN") && !hoa.equals("OUT")) {
+            throw new IllegalArgumentException(
+                    "direction chi nhan IN hoac OUT, nhan duoc: " + direction);
+        }
+        return hoa;
     }
 }

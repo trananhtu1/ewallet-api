@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import com.vidien.ewallet.support.PostgresIT;
+import com.vidien.ewallet.transaction.api.dto.TransactionFilter;
 import com.vidien.ewallet.transaction.api.dto.TransactionPage;
 import com.vidien.ewallet.transaction.domain.exception.InvalidCursorException;
 import com.vidien.ewallet.user.domain.User;
@@ -97,7 +98,7 @@ class TransactionPagingIT extends PostgresIT {
         String moc = null;
         // Tran cung de mot loi phan trang thanh vong lap vo tan khong treo ca lan chay test.
         for (int vong = 0; vong < 100; vong++) {
-            TransactionPage trang = walletService.history(vi, limit, moc, vi);
+            TransactionPage trang = walletService.history(vi, limit, moc, TransactionFilter.none(), vi);
             trang.items().forEach(v -> thay.add(v.id()));
             if (!trang.hasMore()) {
                 return thay;
@@ -131,7 +132,7 @@ class TransactionPagingIT extends PostgresIT {
             ghi(goc.plusSeconds(i), "10.00");
         }
 
-        TransactionPage trang1 = walletService.history(vi, 5, null, vi);
+        TransactionPage trang1 = walletService.history(vi, 5, null, TransactionFilter.none(), vi);
         List<Long> daXem = trang1.items().stream().map(v -> v.id()).toList();
         assertThat(daXem).hasSize(5);
 
@@ -140,7 +141,7 @@ class TransactionPagingIT extends PostgresIT {
             ghi(goc.plusSeconds(100 + i), "99.00");
         }
 
-        TransactionPage trang2 = walletService.history(vi, 5, trang1.nextCursor(), vi);
+        TransactionPage trang2 = walletService.history(vi, 5, trang1.nextCursor(), TransactionFilter.none(), vi);
         List<Long> tiep = trang2.items().stream().map(v -> v.id()).toList();
 
         // Day la ca ma OFFSET lam sai: voi OFFSET 5, ba dong cuoi cua trang 1 se hien lai.
@@ -173,7 +174,7 @@ class TransactionPagingIT extends PostgresIT {
             ghi(goc.plusSeconds(i), "10.00");
         }
 
-        TransactionPage trang = walletService.history(vi, 10, null, vi);
+        TransactionPage trang = walletService.history(vi, 10, null, TransactionFilter.none(), vi);
 
         assertThat(trang.items()).hasSize(3);
         assertThat(trang.hasMore()).isFalse();
@@ -185,7 +186,7 @@ class TransactionPagingIT extends PostgresIT {
     void cursorBiaRaThiTuChoi() {
         ghi(Instant.parse("2026-08-29T00:00:00Z"), "10.00");
 
-        assertThatThrownBy(() -> walletService.history(vi, 10, "khong-phai-cursor", vi))
+        assertThatThrownBy(() -> walletService.history(vi, 10, "khong-phai-cursor", TransactionFilter.none(), vi))
                 .isInstanceOf(InvalidCursorException.class);
     }
 }

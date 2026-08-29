@@ -126,10 +126,22 @@ class WalletCacheIT extends PostgresIT {
                 .as("doc lan hai van ra so cu => cache dang duoc dung that")
                 .isEqualByComparingTo("100000.00");
 
-        // Va sau khi xoa cache thi no phai thay so moi - de chac rang cai tren khong phai do
-        // lenh UPDATE that bai.
-        cacheManager.getCache("wallet").evict(viA);
-        assertThat(doc(viA)).isEqualByComparingTo("777.00");
+        // Va de chac rang khang dinh tren khong phai do lenh UPDATE that bai: doc THANG
+        // database, khong qua service.
+        //
+        // ⚠️ Ban dau cho nay la evict() roi doc lai. No dung ve y nghia nhung ĐỎ MỘT LẦN
+        // trong bon lan chay full suite - tuc la mot test FLAKY. Chua truy ra co che (cung
+        // ho voi chuyen clear() khong xoa gi, ghi o DA_TAO), nhung mot test flaky thi phai
+        // sua ngay chu khong duoc chay lai cho toi khi xanh: no day nguoi ta thoi quen bo qua
+        // mau do.
+        //
+        // Ban nay khong phu thuoc vao thoi diem lenh xoa lan toi Redis nua - no chi hoi
+        // database mot cau ma database luon tra loi duoc.
+        BigDecimal trongDatabase = db.sql("SELECT balance FROM wallets WHERE id = :id")
+                .param("id", viA).query(BigDecimal.class).single();
+        assertThat(trongDatabase)
+                .as("UPDATE co that su chay - nen so cu o tren dung la tu cache")
+                .isEqualByComparingTo("777.00");
     }
 
     @Test
