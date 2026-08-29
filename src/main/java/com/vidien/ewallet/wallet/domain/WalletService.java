@@ -1,6 +1,7 @@
 package com.vidien.ewallet.wallet.domain;
 
 import java.math.BigDecimal;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -12,6 +13,7 @@ import com.vidien.ewallet.transaction.api.dto.TransactionCursor;
 import com.vidien.ewallet.transaction.api.dto.TransactionPage;
 import com.vidien.ewallet.transaction.api.dto.TransactionView;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
+import com.vidien.ewallet.wallet.infra.WalletCache;
 import com.vidien.ewallet.wallet.infra.WalletRepository;
 
 /**
@@ -37,10 +39,15 @@ public class WalletService {
 
     private final WalletRepository wallets;
     private final TransactionRepository transactions;
+    private final WalletCache cache;
+    private final ApplicationEventPublisher events;
 
-    public WalletService(WalletRepository wallets, TransactionRepository transactions) {
+    public WalletService(WalletRepository wallets, TransactionRepository transactions,
+            WalletCache cache, ApplicationEventPublisher events) {
         this.wallets = wallets;
         this.transactions = transactions;
+        this.cache = cache;
+        this.events = events;
     }
 
     /**
@@ -92,9 +99,22 @@ public class WalletService {
      */
     @Transactional(readOnly = true)
     public Wallet findById(long walletId, long callerWalletId) {
+        // ⚠️ THU TU HAI DONG NAY LA MOT QUYET DINH BAO MAT, khong phai thoi quen.
+        //
+        // requireOwn PHAI chay TRUOC, va no phai nam NGOAI cache. Dat @Cacheable len chinh
+        // method nay thi cache hit se KHONG CHAY THAN METHOD - tuc la khong chay ca
+        // requireOwn. Ke tan cong bi tu choi lan dau, doi chu vi that mo trang mot cai (cache
+        // duoc nap), roi goi lai va nhan duoc so du cua nguoi khac kem ma 200.
+        //
+        // Do la dung lo BOLA da bit o PR #2, mo lai bang mot dong annotation trong vo hai.
+        // @Cacheable khong phai "chay nhanh hon" - no la "khong chay nua".
         requireOwn(walletId, callerWalletId);
 
-        return wallets.findById(walletId)
+        // Goi THANG cache.read(), khong qua mot ham boc nao. Mot lop boc mong dat giua -
+        // ke ca khi no nam trong CHINH bean WalletCache - lam @Cacheable ngung tac dung, vi
+        // loi goi ben trong bean khong di qua proxy. Da do: cache khong chay, khong mot dong
+        // canh bao. Xem ghi chu cuoi WalletCache.
+        return java.util.Optional.ofNullable(cache.read(walletId))
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
     }
 
@@ -128,6 +148,13 @@ public class WalletService {
                 .status(TransactionStatus.SUCCESS)
                 .build());
 
+        // So du vua doi -> ban cache cu da sai. KHONG xoa thang o day: luc nay transaction
+        // chua commit, va mot request khac doc trong khoang giua se nap lai cache bang chinh
+        // gia tri CU. Su kien nay duoc xu ly sau khi commit - xem WalletCacheEvictor.
+        events.publishEvent(new WalletChangedEvent(walletId));
+
+        // Doc thang repository, KHONG qua cache: cache cua vi nay se bi xoa sau khi commit,
+        // nhung "sau khi commit" la sau dong nay. Doc qua cache o day la doc lai chinh ban cu.
         return wallets.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
     }

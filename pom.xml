@@ -117,6 +117,25 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!--
+		  Cache: hai starter chu khong mot.
+
+		  spring-boot-starter-cache mang ABSTRACTION (@Cacheable, @CacheEvict, CacheManager).
+		  Mot minh no thi Spring dung ConcurrentHashMap trong RAM - chay duoc, nhung moi
+		  instance mot ban sao rieng, va Render co the chay nhieu instance.
+
+		  spring-boot-starter-data-redis mang CAI CHUA THAT. Doi hai instance dung chung mot
+		  cho nho, va cache song qua lan restart.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
 		<!-- Testcontainers: dung mot Postgres THAT trong Docker cho tung lan chay test.
 		     Khong dung H2 - va day khong phai so thich:
 

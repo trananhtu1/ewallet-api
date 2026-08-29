@@ -4,6 +4,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -59,8 +60,27 @@ public abstract class PostgresIT {
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:18-alpine");
 
+    /**
+     * Redis THAT, cung ly do voi Postgres that: cache trong RAM
+     * ({@code ConcurrentMapCacheManager}) khong tra loi duoc cau hoi can hoi nhat.
+     *
+     * <p>
+     * Cache RAM khong tuan tu hoa gi ca - no giu nguyen tham chieu Java. Nghia la moi loi
+     * serialize deu <b>tang hinh</b>: kieu {@code Instant} ghi sai dinh dang, thieu thong tin
+     * kieu de dung lai object, {@code BigDecimal} bien thanh {@code double} - khong loi nao lo
+     * ra cho toi khi len production noi cai cache la Redis that.
+     *
+     * <p>
+     * Va no cung khong co TTL that, khong co chuyen hai instance dung chung mot cho nho.
+     * <b>Test tren mot ha tang khac production la test mot he thong khac</b> - cung mot cau
+     * da viet cho H2 o tren.
+     */
+    static final GenericContainer<?> REDIS =
+            new GenericContainer<>("redis:8-alpine").withExposedPorts(6379);
+
     static {
         POSTGRES.start();
+        REDIS.start();
     }
 
     /**
@@ -75,5 +95,12 @@ public abstract class PostgresIT {
     static void props(DynamicPropertyRegistry registry) {
         registry.add("app.jwt.secret", () -> "khoa-test-32-ky-tu-toi-thieu-cho-HS256");
         registry.add("app.cors.allowed-origins", () -> "http://localhost:5173");
+
+        // Cache BAT trong test. Mac dinh cua app la `none` (xem application.properties) vi
+        // Render chua co Redis - nhung test ma chay voi cache tat thi no dang canh giu mot
+        // duong khac han duong that.
+        registry.add("spring.cache.type", () -> "redis");
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
 }

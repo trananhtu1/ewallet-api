@@ -53,6 +53,17 @@ class TransferServiceTest {
     private FailedTransferRecorder failedTransfers;
     @Mock
     private Auditor audit;
+    /**
+     * ⚠️ Them mock nay vi TransferService gio phat WalletChangedEvent de xoa cache.
+     *
+     * <p>
+     * Thieu no thi {@code @InjectMocks} de nguyen field null va bay test do voi
+     * {@code NullPointerException} - da gap that. Day la mat trai cua {@code @InjectMocks}:
+     * no dung duoc doi tuong ngay ca khi con thieu mot phu thuoc, roi de loi no ra luc CHAY
+     * chu khong phai luc bien dich. Constructor viet tay thi trinh bien dich bat duoc ngay.
+     */
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher events;
 
     @InjectMocks
     private TransferService transferService;
