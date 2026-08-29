@@ -27,17 +27,41 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * {@code @DynamicPropertySource} viet tay ba dong nhu truoc kia.
  *
  * <p>
- * Container la {@code static}: MOT Postgres dung chung cho ca lop con, khong dung mot cai moi
- * cho tung method. Khoi dong Postgres mat vai giay - nhan len so luong test thi do la phut.
+ * <b>SINGLETON container, KHONG dung {@code @Container}</b> - va day la mot bai hoc phai tra
+ * gia moi biet, ngay 29/08/2026, lan dau tien cac test nay duoc chay that.
+ *
+ * <p>
+ * {@code @Container} giao vong doi container cho <b>tung lop con</b>: JUnit khoi dong truoc
+ * lop do va <b>DUNG no lai sau khi lop do xong</b>. Nhung Spring thi <b>CACHE application
+ * context</b> - hai lop con co cung cau hinh dung chung mot context, tuc la dung chung mot
+ * Hikari pool. Ket qua: lop thu nhat chay xanh, container chet theo no, lop thu hai lay dung
+ * cai pool cu con tro vao cong cua container da chet:
+ *
+ * <pre>
+ * Connection to localhost:56700 refused
+ * HikariPool-1 - Connection is not available, request timed out after 10012ms
+ * </pre>
+ *
+ * <p>
+ * Cach dung: tu goi {@code start()} trong static block va <b>khong bao gio stop</b>. Container
+ * song suot ca lan chay JVM, moi lop con dung chung. Khong ro ri gi ca - Ryuk (container phu
+ * ma Testcontainers tu dung len) don dep khi JVM tat.
+ *
+ * <p>
+ * {@code @Testcontainers} van giu lai, vi {@code disabledWithoutDocker} nam o extension chu
+ * khong nam o {@code @Container}.
  */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class PostgresIT {
 
-    @org.testcontainers.junit.jupiter.Container
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:18-alpine");
+
+    static {
+        POSTGRES.start();
+    }
 
     /**
      * Flyway chay tren container nay, khong phai tren Neon. Nghia la <b>ca cac file migration
