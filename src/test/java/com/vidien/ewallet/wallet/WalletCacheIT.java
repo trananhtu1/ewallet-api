@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Cache số dư ví (Redis)
+ * VAI TRÒ  : Bốn cách cache làm sai, gồm cả việc cache nhảy qua kiểm quyền.
+ * LIÊN QUAN: WalletCache · WalletCacheEvictor · CacheConfig
+ * BÀI GIẢNG: java-learn/java/07-cache/BUOI-15-REDIS-CACHE.md
+ */
 package com.vidien.ewallet.wallet;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — phân trang bằng cursor
+ * VAI TRÒ  : Chèn dòng mới giữa chừng vẫn không trùng không sót — cái OFFSET làm sai.
+ * LIÊN QUAN: TransactionCursor · TransactionSearchRepository
+ * BÀI GIẢNG: java-learn/java/04-database/BUOI-14-CURSOR-PAGINATION.md
+ */
 package com.vidien.ewallet.transaction;
 
 import static org.assertj.core.api.Assertions.assertThat;

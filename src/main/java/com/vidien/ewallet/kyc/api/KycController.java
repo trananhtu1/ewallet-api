@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Biên HTTP: nhận multipart, lấy userId từ TOKEN chứ không từ tham số.
+ * LIÊN QUAN: KycService · DocumentImage · KycView
+ */
 package com.vidien.ewallet.kyc.api;
 
 import java.io.IOException;

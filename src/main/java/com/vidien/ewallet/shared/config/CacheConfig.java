@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Cache số dư ví (Redis)
+ * VAI TRÒ  : @EnableCaching + TTL 10 phút + JSON (Jackson 3). Mặc định TẮT nếu chưa có Redis.
+ * LIÊN QUAN: WalletCache · application.properties (spring.cache.type)
+ * BÀI GIẢNG: java-learn/java/07-cache/BUOI-15-REDIS-CACHE.md
+ */
 package com.vidien.ewallet.shared.config;
 
 import java.time.Duration;

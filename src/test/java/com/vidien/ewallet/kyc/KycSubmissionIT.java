@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : 8 request cùng lúc ra đúng 1 dòng — do unique index, không do câu if.
+ * LIÊN QUAN: KycService · DocumentImage · V7
+ */
 package com.vidien.ewallet.kyc;
 
 import static org.assertj.core.api.Assertions.assertThat;

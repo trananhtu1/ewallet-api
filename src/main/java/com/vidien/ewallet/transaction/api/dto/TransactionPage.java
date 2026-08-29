@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — phân trang bằng cursor
+ * VAI TRÒ  : Một trang: items + nextCursor + hasMore. Cố ý KHÔNG có total.
+ * LIÊN QUAN: TransactionCursor · WalletService.history · ewallet-web walletApi.js
+ * BÀI GIẢNG: java-learn/java/04-database/BUOI-14-CURSOR-PAGINATION.md
+ */
 package com.vidien.ewallet.transaction.api.dto;
 
 import java.util.List;

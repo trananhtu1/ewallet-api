@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — phân trang bằng cursor
+ * VAI TRÒ  : Mốc (createdAt, id) mã hoá Base64. Chuỗi đọc không ra, cầm nguyên xi gửi lại.
+ * LIÊN QUAN: TransactionPage · TransactionSearchRepository · V6
+ * BÀI GIẢNG: java-learn/java/04-database/BUOI-14-CURSOR-PAGINATION.md
+ */
 package com.vidien.ewallet.transaction.api.dto;
 
 import java.nio.charset.StandardCharsets;

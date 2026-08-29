@@ -1,6 +1,7 @@
 package com.vidien.ewallet.transfer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import com.vidien.ewallet.support.PostgresIT;
 import com.vidien.ewallet.transfer.domain.TransferService;
+import com.vidien.ewallet.transfer.domain.exception.IdempotencyKeyReusedException;
 import com.vidien.ewallet.user.domain.User;
 import com.vidien.ewallet.user.infra.UserRepository;
 import com.vidien.ewallet.wallet.domain.WalletService;
@@ -150,6 +152,68 @@ class TransferConcurrencyIT extends PostgresIT {
      * Kiem khoa TRUOC lenh khoa dong thi ca 10 deu doc thay "chua co" va ca 10 deu chuyen.
      * Kiem SAU thi 9 request bi chan o lockById cho toi khi request dau tien commit xong.
      */
+    /**
+     * ⭐ CUNG khoa nhung KHAC noi dung -> phai TU CHOI, khong duoc lang le bo qua.
+     *
+     * <p>
+     * Day khong phai ca "bam hai lan". Bam hai lan thi noi dung y het nhau. Ca nay la nguoi
+     * dung bam gui 1.000, mang cham, ho SUA so tien thanh 5.000 roi bam lai - va client dung
+     * lai khoa cu.
+     *
+     * <p>
+     * Truoc 29/08, he thong tra ve "da lam roi" va bo qua lenh moi. Nguoi dung tin minh vua
+     * gui 5.000, so cai ghi 1.000, khong loi nao bao. Stripe tra 409 cho dung ca nay.
+     */
+    @Test
+    @DisplayName("⭐ cung khoa nhung KHAC so tien -> 409, va so cai KHONG co dong thu hai")
+    void cungKhoaKhacSoTienThiTuChoi() {
+        String khoa = "khoa-nguoi-dung-sua-so-tien";
+
+        transferService.transfer(viA, viB, new BigDecimal("1000.00"), viA, khoa);
+
+        assertThatThrownBy(() ->
+                transferService.transfer(viA, viB, new BigDecimal("5000.00"), viA, khoa))
+                .isInstanceOf(IdempotencyKeyReusedException.class);
+
+        Integer soDong = db.sql(
+                "SELECT count(*) FROM transactions WHERE idempotency_key = :k")
+                .param("k", khoa).query(Integer.class).single();
+        assertThat(soDong).isEqualTo(1);
+
+        // Va tien chi di dung MOT lan.
+        assertThat(db.sql("SELECT balance FROM wallets WHERE id = :id")
+                .param("id", viA).query(BigDecimal.class).single())
+                .isEqualByComparingTo("99000.00");
+    }
+
+    @Test
+    @DisplayName("cung khoa nhung KHAC vi nhan -> 409")
+    void cungKhoaKhacViNhanThiTuChoi() {
+        String khoa = "khoa-doi-nguoi-nhan";
+        long viC = taoVi("c@test.com", "0.00");
+
+        transferService.transfer(viA, viB, new BigDecimal("1000.00"), viA, khoa);
+
+        assertThatThrownBy(() ->
+                transferService.transfer(viA, viC, new BigDecimal("1000.00"), viA, khoa))
+                .isInstanceOf(IdempotencyKeyReusedException.class);
+    }
+
+    @Test
+    @DisplayName("cung khoa, cung noi dung -> KHONG loi, van la mot dong (bam hai lan)")
+    void cungKhoaCungNoiDungThiIm() {
+        String khoa = "khoa-bam-hai-lan";
+
+        transferService.transfer(viA, viB, new BigDecimal("1000.00"), viA, khoa);
+        // Lan hai khong duoc nem gi ca - day la ca ma idempotency sinh ra de phuc vu.
+        transferService.transfer(viA, viB, new BigDecimal("1000.00"), viA, khoa);
+
+        Integer soDong = db.sql(
+                "SELECT count(*) FROM transactions WHERE idempotency_key = :k")
+                .param("k", khoa).query(Integer.class).single();
+        assertThat(soDong).isEqualTo(1);
+    }
+
     @Test
     @DisplayName("10 request cung Idempotency-Key -> tien chi di MOT lan, so cai MOT dong")
     void chiChuyenMotLanDuMuoiRequest() throws Exception {

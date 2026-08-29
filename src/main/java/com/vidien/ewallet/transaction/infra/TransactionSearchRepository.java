@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — lọc / tìm kiếm + phân trang
+ * VAI TRÒ  : Sinh SQL lúc chạy: chỉ nối điều kiện khi nó thực sự có. Không có OR NULL nào.
+ * LIÊN QUAN: TransactionFilter · TransactionCursor · V6 (index có id)
+ */
 package com.vidien.ewallet.transaction.infra;
 
 import java.time.OffsetDateTime;

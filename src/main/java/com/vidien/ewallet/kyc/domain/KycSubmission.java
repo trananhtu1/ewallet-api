@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Entity hồ sơ. Kiểu lai: cột thường cho thứ hay lọc, JSONB cho metadata ảnh.
+ * LIÊN QUAN: KycStatus · KycSubmissionRepository · V7
+ */
 package com.vidien.ewallet.kyc.domain;
 
 import java.time.Instant;

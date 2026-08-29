@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : Nền cho mọi integration test
+ * VAI TRÒ  : Singleton Postgres + Redis thật. Và một chỗ duy nhất để dọn dữ liệu.
+ * LIÊN QUAN: DockerRequiredIT · mọi *IT
+ */
 package com.vidien.ewallet.support;
 
 import org.springframework.beans.factory.annotation.Autowired;

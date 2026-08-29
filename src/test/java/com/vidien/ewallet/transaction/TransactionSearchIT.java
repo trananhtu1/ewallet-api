@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — lọc / tìm kiếm
+ * VAI TRÒ  : Lọc phải hợp tác được với phân trang, và phải nằm TRONG nhánh UNION ALL.
+ * LIÊN QUAN: TransactionFilter · TransactionSearchRepository
+ */
 package com.vidien.ewallet.transaction;
 
 import static org.assertj.core.api.Assertions.assertThat;

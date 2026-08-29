@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Truy vấn hồ sơ KYC.
+ * LIÊN QUAN: KycSubmission · V7 (ix_kyc_user_created)
+ */
 package com.vidien.ewallet.kyc.infra;
 
 import java.util.List;

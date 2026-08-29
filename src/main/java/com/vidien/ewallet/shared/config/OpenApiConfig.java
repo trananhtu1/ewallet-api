@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : OpenAPI / Swagger UI
+ * VAI TRÒ  : Mô tả API + nút Authorize. Thiếu nút đó thì trang chỉ để nhìn.
+ * LIÊN QUAN: SecurityConfig (permitAll cho /swagger-ui/**) · mọi Controller
+ */
 package com.vidien.ewallet.shared.config;
 
 import org.springframework.context.annotation.Bean;

@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Tầng nghiệp vụ: nộp hồ sơ, chặn trùng, ghi nhật ký mã băm.
+ * LIÊN QUAN: DocumentImage · KycSubmissionRepository · V7 (unique index có điều kiện)
+ */
 package com.vidien.ewallet.kyc.domain;
 
 import java.util.HashMap;

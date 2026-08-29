@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Kiểm nội dung ảnh và rút metadata. KHÔNG giữ byte ảnh, chỉ giữ SHA-256.
+ * LIÊN QUAN: KycService · KycController · V7__create_kyc_submissions.sql
+ */
 package com.vidien.ewallet.kyc.domain;
 
 import java.security.MessageDigest;
