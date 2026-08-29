@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Cache số dư ví (Redis)
+ * VAI TRÒ  : Sự kiện 'số dư vừa đổi'. Mang id chứ không mang cả Wallet.
+ * LIÊN QUAN: WalletCacheEvictor · WalletService.deposit · TransferService.transfer
+ * BÀI GIẢNG: java-learn/java/07-cache/BUOI-15-REDIS-CACHE.md
+ */
 package com.vidien.ewallet.wallet.domain;
 
 /**

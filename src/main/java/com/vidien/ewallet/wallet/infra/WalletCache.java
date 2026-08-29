@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Cache số dư ví (Redis)
+ * VAI TRÒ  : Bean RIÊNG chỉ để đọc. Kiểm quyền nằm NGOÀI, vì cache hit không chạy thân method.
+ * LIÊN QUAN: WalletCacheEvictor · CacheConfig · WalletService.findById
+ * BÀI GIẢNG: java-learn/java/07-cache/BUOI-15-REDIS-CACHE.md
+ */
 package com.vidien.ewallet.wallet.infra;
 
 import org.springframework.cache.annotation.CacheEvict;

@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — phân trang bằng cursor
+ * VAI TRÒ  : Cursor hỏng → 400, KHÔNG lặng lẽ trả về trang đầu.
+ * LIÊN QUAN: TransactionCursor · GlobalExceptionHandler
+ * BÀI GIẢNG: java-learn/java/04-database/BUOI-14-CURSOR-PAGINATION.md
+ */
 package com.vidien.ewallet.transaction.domain.exception;
 
 /**

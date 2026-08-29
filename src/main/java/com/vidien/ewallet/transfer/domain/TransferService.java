@@ -17,6 +17,7 @@ import com.vidien.ewallet.transaction.infra.TransactionRepository;
 import com.vidien.ewallet.wallet.domain.exception.InsufficientFundsException;
 import com.vidien.ewallet.wallet.domain.exception.NotYourWalletException;
 import com.vidien.ewallet.wallet.domain.exception.SameWalletTransferException;
+import com.vidien.ewallet.transfer.domain.exception.IdempotencyKeyReusedException;
 import com.vidien.ewallet.wallet.domain.Wallet;
 import com.vidien.ewallet.wallet.domain.WalletChangedEvent;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
@@ -113,6 +114,40 @@ public class TransferService {
             Optional<Transaction> daLam =
                     transactions.findByFromWalletIdAndIdempotencyKey(fromWalletId, idempotencyKey);
             if (daLam.isPresent()) {
+                Transaction cu = daLam.get();
+
+                // ⭐ CUNG KHOA nhung KHAC NOI DUNG -> 409, khong duoc lang le bo qua.
+                //
+                // Truoc ban nay, moi lan trung khoa deu tra ve "da lam roi". Dung cho ca
+                // BAM HAI LAN (noi dung y het), sai cho ca nguoi dung SUA SO TIEN roi gui lai
+                // ma client dung lai khoa cu: he thong bao thanh cong, nguoi dung tin minh
+                // vua gui 5.000, so cai ghi 1.000. Khong loi nao bao.
+                //
+                // Khong can luu them "van tay cua body": bang transactions DA giu du
+                // to_wallet_id va amount cua lan truoc. So thang.
+                // Null-safe o ca hai ve. `amount` la NOT NULL trong V1 nen tren du lieu that
+                // no khong bao gio null - nhung mot NPE o day se thanh HTTP 500 cho mot ca ma
+                // cau tra loi dung phai la 409. Khong danh doi mot ma loi dung lay hai dong
+                // ngan hon.
+                boolean khacNoiDung = !java.util.Objects.equals(cu.getToWalletId(), toWalletId)
+                        || cu.getAmount() == null
+                        || cu.getAmount().compareTo(amount) != 0;
+
+                if (khacNoiDung) {
+                    log.warn("Khoa {} cua vi {} dung lai cho lenh KHAC: cu=(vi {}, {}) "
+                            + "moi=(vi {}, {})", idempotencyKey, fromWalletId,
+                            cu.getToWalletId(), cu.getAmount(), toWalletId, amount);
+
+                    audit.record(AuditEvent.TRANSFER_REJECTED, callerWalletId, Map.of(
+                            "from", fromWalletId, "to", toWalletId,
+                            "amount", amount.toString(),
+                            "reason", "IDEMPOTENCY_KEY_REUSED",
+                            "previousTo", String.valueOf(cu.getToWalletId()),
+                            "previousAmount", cu.getAmount().toString()));
+
+                    throw new IdempotencyKeyReusedException(idempotencyKey, toWalletId, amount);
+                }
+
                 log.info("Bo qua lenh chuyen tien lap: vi {} da dung khoa {}", fromWalletId,
                         idempotencyKey);
                 // Tra ve so du HIEN TAI chu khong phai so du luc do. Nguoi goi hoi

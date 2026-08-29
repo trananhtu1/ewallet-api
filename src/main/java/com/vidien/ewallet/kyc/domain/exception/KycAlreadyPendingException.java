@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Đã có hồ sơ đang chờ → 409.
+ * LIÊN QUAN: KycService · GlobalExceptionHandler
+ */
 package com.vidien.ewallet.kyc.domain.exception;
 
 /**

@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Ảnh không hợp lệ → 400.
+ * LIÊN QUAN: DocumentImage · GlobalExceptionHandler
+ */
 package com.vidien.ewallet.kyc.domain.exception;
 
 /** Anh gui len khong dung dinh dang cho phep, hoac rong. 400 - loi cua ben goi. */

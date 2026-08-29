@@ -1,3 +1,9 @@
+/*
+ * FEATURE  : Cache số dư ví (Redis)
+ * VAI TRÒ  : Xoá cache SAU KHI transaction commit, không phải trong lúc đang ghi.
+ * LIÊN QUAN: WalletChangedEvent · WalletCache · WalletService · TransferService
+ * BÀI GIẢNG: java-learn/java/07-cache/BUOI-15-REDIS-CACHE.md
+ */
 package com.vidien.ewallet.wallet.infra;
 
 import org.springframework.transaction.event.TransactionPhase;

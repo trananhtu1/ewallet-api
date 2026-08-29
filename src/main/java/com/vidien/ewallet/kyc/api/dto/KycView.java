@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : KYC — nộp ảnh CCCD (giả lập)
+ * VAI TRÒ  : Hợp đồng trả về cho client. Lọc bỏ sha256 trước khi ra ngoài.
+ * LIÊN QUAN: KycSubmission · KycController
+ */
 package com.vidien.ewallet.kyc.api.dto;
 
 import java.time.Instant;

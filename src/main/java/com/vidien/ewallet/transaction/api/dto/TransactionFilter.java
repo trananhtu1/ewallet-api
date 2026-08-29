@@ -1,3 +1,8 @@
+/*
+ * FEATURE  : Lịch sử giao dịch — lọc / tìm kiếm
+ * VAI TRÒ  : Bộ lọc. Năm trường, ba mức giá khác hẳn nhau — xem bảng trong Javadoc.
+ * LIÊN QUAN: TransactionSearchRepository · WalletController · V6
+ */
 package com.vidien.ewallet.transaction.api.dto;
 
 import java.time.Instant;

@@ -187,8 +187,19 @@ class TransferServiceTest {
         void boQuaLenhLap() {
             when(wallets.findById(3L)).thenReturn(Optional.of(wallet(3, "500.00")));
             when(wallets.findById(4L)).thenReturn(Optional.of(wallet(4, "0.00")));
+            // ⚠️ Dong cu phai co DU to_wallet_id va amount, khop voi lenh dang goi.
+            //
+            // Truoc day cho nay la `Transaction.builder().id(1L).build()` - mot dong trong
+            // ruot. No chay duoc chung nao service chi kiem "co ton tai khong". Tu 29/08
+            // service con so sanh NOI DUNG de bat ca dung lai khoa cho mot lenh khac, va mot
+            // mock trong ruot lam no NPE.
+            //
+            // 📌 Day dung la cai bay cua mock da ghi o buoi 13: mock tra ve DUNG cai minh bao
+            // no tra ve, nen no cung giau di dung nhung gi minh chua nghi toi.
             when(transactions.findByFromWalletIdAndIdempotencyKey(3L, "da-bam-roi"))
-                    .thenReturn(Optional.of(Transaction.builder().id(1L).build()));
+                    .thenReturn(Optional.of(Transaction.builder()
+                            .id(1L).fromWalletId(3L).toWalletId(4L)
+                            .amount(new BigDecimal("100.00")).build()));
 
             Wallet ketQua = transferService.transfer(3L, 4L, new BigDecimal("100.00"), 3L,
                     "da-bam-roi");

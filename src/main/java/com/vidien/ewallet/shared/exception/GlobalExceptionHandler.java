@@ -17,6 +17,7 @@ import com.vidien.ewallet.auth.domain.exception.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.domain.exception.InvalidCredentialsException;
 import com.vidien.ewallet.auth.domain.exception.InvalidRefreshTokenException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import com.vidien.ewallet.transfer.domain.exception.IdempotencyKeyReusedException;
 import com.vidien.ewallet.kyc.domain.exception.InvalidDocumentException;
 import com.vidien.ewallet.kyc.domain.exception.KycAlreadyPendingException;
 import com.vidien.ewallet.transaction.domain.exception.InvalidCursorException;
@@ -235,6 +236,28 @@ public class GlobalExceptionHandler {
         }
 
         /** Anh giay to khong hop le -> 400. Loi cua ben goi, va sua duoc bang cach chup lai. */
+        /**
+         * Cung khoa chong lap, khac noi dung -> 409.
+         *
+         * <p>
+         * Ma rieng {@code IDEMPOTENCY_KEY_REUSED} chu khong dung chung voi mot ma cu: client
+         * phai phan biet duoc "lenh cua ban da chay roi" (khong lam gi ca) voi "ban dang dung
+         * lai mot khoa cho mot lenh khac" (phai sinh khoa moi roi gui lai). Hai ca do doi hai
+         * hanh dong nguoc nhau.
+         */
+        @ExceptionHandler(IdempotencyKeyReusedException.class)
+        public ResponseEntity<ErrorResponse> handleKeyReused(IdempotencyKeyReusedException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(409, "IDEMPOTENCY_KEY_REUSED",
+                                "Khóa chống lặp này đã dùng cho một lệnh khác. "
+                                                + "Hãy sinh khóa mới rồi gửi lại.",
+                                request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
+
         @ExceptionHandler(InvalidDocumentException.class)
         public ResponseEntity<ErrorResponse> handleInvalidDocument(InvalidDocumentException e,
                         HttpServletRequest request) {
