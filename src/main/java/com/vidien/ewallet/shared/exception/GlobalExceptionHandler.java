@@ -16,6 +16,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.vidien.ewallet.auth.domain.exception.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.domain.exception.InvalidCredentialsException;
 import com.vidien.ewallet.auth.domain.exception.InvalidRefreshTokenException;
+import com.vidien.ewallet.transaction.domain.exception.InvalidCursorException;
 import com.vidien.ewallet.wallet.domain.exception.InsufficientFundsException;
 import com.vidien.ewallet.wallet.domain.exception.NotYourWalletException;
 import com.vidien.ewallet.wallet.domain.exception.SameWalletTransferException;
@@ -197,6 +198,31 @@ public class GlobalExceptionHandler {
          * thay vi". Bien nay khong nhay cam lam, nhung giu dung mot luat cho ca file thi khong
          * phai nho ngoai le.
          */
+        /**
+         * Cursor phan trang hong -> 400.
+         *
+         * <p>
+         * Khong tra ve trang dau, va khong tra ve mang rong. Ca hai deu la du lieu DUNG DINH
+         * DANG nhung SAI Y NGHIA: nguoi dung bam "xem them" roi nhan lai dau danh sach, khong
+         * mot dau hieu nao la co chuyen gi. Loi tu khoi phuc la loai kho tim nhat.
+         *
+         * <p>
+         * ⚠️ Handler nay PHAI dung tren luoi chan @ExceptionHandler(Exception.class) o duoi -
+         * dung hon la Spring chon handler theo do KHOP CUA KIEU chu khong theo thu tu trong
+         * file, nhung day la lan thu ba trong project mot exception co y nghia bi luoi chan
+         * cuoi ha thanh 500. Ghi lai o day de lan sau con nho kiem.
+         */
+        @ExceptionHandler(InvalidCursorException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidCursor(InvalidCursorException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(400, "INVALID_CURSOR",
+                                "Cursor phân trang không hợp lệ", request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        }
+
         @ExceptionHandler(WalletNotFoundException.class)
         public ResponseEntity<ErrorResponse> handleWalletNotFound(WalletNotFoundException e,
                         HttpServletRequest request) {

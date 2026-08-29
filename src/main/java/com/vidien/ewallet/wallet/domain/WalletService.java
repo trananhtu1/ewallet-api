@@ -8,6 +8,8 @@ import com.vidien.ewallet.transaction.infra.TransactionRepository;
 import com.vidien.ewallet.transaction.domain.Transaction;
 import com.vidien.ewallet.transaction.domain.TransactionStatus;
 import com.vidien.ewallet.transaction.domain.TransactionType;
+import com.vidien.ewallet.transaction.api.dto.TransactionCursor;
+import com.vidien.ewallet.transaction.api.dto.TransactionPage;
 import com.vidien.ewallet.transaction.api.dto.TransactionView;
 import com.vidien.ewallet.wallet.domain.exception.WalletNotFoundException;
 import com.vidien.ewallet.wallet.infra.WalletRepository;
@@ -131,23 +133,59 @@ public class WalletService {
     }
 
     /**
-     * Lich su giao dich cua mot vi.
+     * Lich su giao dich cua mot vi, phan trang bang CURSOR.
      *
      * <p>
      * Kiem vi ton tai TRUOC: khong co buoc nay thi vi khong ton tai se tra ve mang rong 200,
      * y het mot vi that su chua co giao dich nao. Hai chuyen khac han nhau ma client khong
      * phan biet duoc.
+     *
+     * <p>
+     * <b>Xin limit + 1 dong, tra ve limit.</b> Dong thu {@code limit + 1} khong bao gio den
+     * tay client - no chi de tra loi cau <i>"con nut Xem them khong"</i>. Cach kia la
+     * {@code COUNT(*)} cua ca vi, va tren mot vi 200.000 giao dich thi rieng con so do dat hon
+     * ca 20 dong du lieu that, lai phai tinh lai o MOI trang.
+     *
+     * <p>
+     * ⚠️ Moc cua trang sau lay tu dong CUOI CUNG DUOC TRA VE, khong phai dong thu
+     * {@code limit + 1}. Lay nham dong thua thi dong do bi nhay qua - no chua bao gio hien
+     * ra man hinh ma cursor da di qua no roi.
+     *
+     * @param cursor moc client cam ve tu lan goi truoc; {@code null} nghia la trang dau
      */
     @Transactional(readOnly = true)
-    public List<TransactionView> history(long walletId, int limit, long callerWalletId) {
+    public TransactionPage history(long walletId, int limit, String cursor, long callerWalletId) {
         requireOwn(walletId, callerWalletId);
 
         if (wallets.findById(walletId).isEmpty()) {
             throw new WalletNotFoundException(walletId);
         }
 
-        return transactions.findByWalletId(walletId, limit).stream()
-                .map(tx -> TransactionView.of(tx, walletId))
-                .toList();
+        // Xin thua MOT dong de biet con trang sau hay khong. Dong nay bi vut ngay duoi day.
+        int xin = limit + 1;
+
+        List<Transaction> rows;
+        if (cursor == null || cursor.isBlank()) {
+            rows = transactions.findFirstPage(walletId, xin);
+        } else {
+            TransactionCursor moc = TransactionCursor.decode(cursor);
+            rows = transactions.findAfterCursor(walletId, moc.createdAt(), moc.id(), xin);
+        }
+
+        if (rows.isEmpty()) {
+            return TransactionPage.empty();
+        }
+
+        boolean conNua = rows.size() > limit;
+        List<Transaction> trang = conNua ? rows.subList(0, limit) : rows;
+
+        String mocSau = conNua
+                ? TransactionCursor.of(trang.get(trang.size() - 1)).encode()
+                : null;
+
+        return new TransactionPage(
+                trang.stream().map(tx -> TransactionView.of(tx, walletId)).toList(),
+                mocSau,
+                conNua);
     }
 }

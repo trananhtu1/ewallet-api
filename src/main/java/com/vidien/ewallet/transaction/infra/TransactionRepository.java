@@ -1,5 +1,6 @@
 package com.vidien.ewallet.transaction.infra;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -54,15 +55,70 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                 (SELECT id, from_wallet_id, to_wallet_id, amount, type, status,
                         idempotency_key, created_at
                  FROM transactions WHERE from_wallet_id = :id
-                 ORDER BY created_at DESC LIMIT :limit)
+                 ORDER BY created_at DESC, id DESC LIMIT :limit)
                 UNION ALL
                 (SELECT id, from_wallet_id, to_wallet_id, amount, type, status,
                         idempotency_key, created_at
                  FROM transactions WHERE to_wallet_id = :id
-                 ORDER BY created_at DESC LIMIT :limit)
+                 ORDER BY created_at DESC, id DESC LIMIT :limit)
             ) x
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT :limit
             """, nativeQuery = true)
-    List<Transaction> findByWalletId(@Param("id") long walletId, @Param("limit") int limit);
+    List<Transaction> findFirstPage(@Param("id") long walletId, @Param("limit") int limit);
+
+    /**
+     * ⭐ Trang THU HAI tro di: lay tiep tu moc {@code (cursorAt, cursorId)} tro xuong.
+     *
+     * <p>
+     * <b>Vi sao la mot method RIENG chu khong nhet cursor vao cau tren bang
+     * {@code (:cursorAt IS NULL OR (created_at, id) < (:cursorAt, :cursorId))}.</b> Cach do
+     * gon hon mot nua so dong va no CHAY DUNG - nhung no giet index. Postgres phai chuan bi
+     * MOT ke hoach dung cho ca hai truong hop, ma mot dieu kien co {@code OR} voi {@code NULL}
+     * thi khong quy ve duoc {@code Index Cond}; no roi xuong {@code Filter}, tuc la doc dong
+     * len roi moi loai. Toan bo cai gia phai tra o V6 mat sach.
+     *
+     * <p>
+     * Hai cau, moi cau mot ke hoach toi uu. Do la mot lan lap lai co ly do.
+     *
+     * <p>
+     * <b>Vi sao dieu kien cursor nam TRONG tung nhanh UNION ALL chu khong o ngoai.</b> Dat o
+     * ngoai thi moi nhanh van doc {@code LIMIT :limit} dong DAU TIEN cua no - tuc la nhung
+     * dong nguoi dung DA XEM - roi vong ngoai loc het di va tra ve rong. Trang 2 se trong,
+     * trang 3 cung trong, mai mai. Dieu kien phai di VAO cho no chan duoc som nhat.
+     *
+     * <p>
+     * ⚠️ {@code (created_at, id) < (:cursorAt, :cursorId)} la so sanh BO GIA TRI, khong phai
+     * {@code created_at < :cursorAt AND id < :cursorId}. Hai cai KHAC HAN nhau: cai thu hai
+     * doi ca hai cot cung nho hon, nen no vut mat moi dong co {@code created_at} nho hon
+     * nhung {@code id} lon hon - va do la phan lon du lieu.
+     *
+     * <p>
+     * 📌 {@code Instant} bind duoc o day la nho Hibernate doi kieu ho. Driver pgjdbc TU CHOI
+     * {@code Instant} ({@code "Can't infer the SQL type"}) - da gap that trong
+     * {@code TransactionPagingIT} khi dung {@code JdbcClient} thang, phai doi sang
+     * {@code OffsetDateTime}. Cung mot kieu du lieu, hai tang, hai ket qua khac nhau.
+     */
+    @Query(value = """
+            SELECT * FROM (
+                (SELECT id, from_wallet_id, to_wallet_id, amount, type, status,
+                        idempotency_key, created_at
+                 FROM transactions
+                 WHERE from_wallet_id = :id
+                   AND (created_at, id) < (:cursorAt, :cursorId)
+                 ORDER BY created_at DESC, id DESC LIMIT :limit)
+                UNION ALL
+                (SELECT id, from_wallet_id, to_wallet_id, amount, type, status,
+                        idempotency_key, created_at
+                 FROM transactions
+                 WHERE to_wallet_id = :id
+                   AND (created_at, id) < (:cursorAt, :cursorId)
+                 ORDER BY created_at DESC, id DESC LIMIT :limit)
+            ) x
+            ORDER BY created_at DESC, id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Transaction> findAfterCursor(@Param("id") long walletId,
+            @Param("cursorAt") Instant cursorAt, @Param("cursorId") long cursorId,
+            @Param("limit") int limit);
 }
