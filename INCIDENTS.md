@@ -406,3 +406,62 @@ jcmd <pid> Thread.print | grep -E '^"(db-health-check|Thread-|ForkJoinPool)'
 
 Không bịa được: có con số (8/7 so với 1/1, 6 request ra 4 + 2), có cách phát hiện (in tên
 thread ra rồi ép số nhân), có chỗ đọc source thay vì đoán, và có phần tự nhận cái chưa đo.
+
+---
+
+## 5. Docker chạy, test vẫn `Skipped: 8`, và build vẫn `SUCCESS`
+
+| | |
+|---|---|
+| **Ngày** | 29/08/2026 |
+| **Hiện tượng** | **Không có hiện tượng nào cả — đó chính là sự cố.** Mang code về máy Windows có Docker để chạy 8 integration test lần đầu. Docker Desktop bật, `docker ps` xanh, `docker run --rm hello-world` exit 0. Chạy `./mvnw verify` ra `Tests run: 8, Failures: 0, Errors: 0, **Skipped: 8**` kèm `BUILD SUCCESS` — **y hệt kết quả trên máy Mac không có Docker**. |
+| **Tìm ra bằng cách nào** | **Đọc số lượng test, không đọc màu build.** `BUILD SUCCESS` là thật, và nếu dừng ở đó thì đã tick xong ô checkbox dựa trên 8 test chưa bao giờ chạy. Đào tiếp vào log Failsafe thấy `Could not find a valid Docker environment`, cả hai strategy của Testcontainers đều ăn **HTTP 400**. Thử thêm ba đường đều không ăn: `DOCKER_HOST` trỏ thẳng `npipe:////./pipe/dockerDesktopLinuxEngine`, `DOCKER_API_VERSION=1.55`, và nâng lên `1.21.4` — bản này **kéo đúng docker-java 3.4.2** như cũ. Dò `javap` vào jar mới thấy bản có docker-java 3.7.1 là **Testcontainers 2.0.5**. |
+| **Nguyên nhân gốc** | Testcontainers **1.21.3** (giữa 2025) không bắt tay được với **Docker Engine 29.7.2 / API 1.55** (08/2026). `docker` CLI chạy được vì nó **đọc context** (`desktop-linux`); Testcontainers thì **hardcode** `//./pipe/docker_engine`. Nhưng đó mới là nửa đầu. Nửa sau nguy hiểm hơn: Testcontainers **dịch HTTP 400 thành "không có Docker"**, và `@Testcontainers(disabledWithoutDocker = true)` biến điều đó thành một dòng `Skipped` — tức là **một lỗi hạ tầng bị hạ cấp thành một dòng không ai đọc**. |
+| **Cách chữa** | Nâng `testcontainers-bom` `1.21.3 → 2.0.5` (đổi 3 dòng `pom.xml`, không phải sửa một import nào). Và thêm `DockerRequiredIT`: khi `REQUIRE_DOCKER=true` mà không tìm thấy Docker thì **build ĐỎ**, kèm thông báo chỉ thẳng vào ba bước kiểm. Không sửa được `disabledWithoutDocker` thành có điều kiện — nó là hằng số **lúc biên dịch**. |
+
+**Và test chạy được rồi thì 4 cái ĐỎ** — một lỗi có sẵn trong bộ test từ ngày viết ra:
+`@Container` dừng container sau **mỗi lớp con**, còn Spring thì **cache application context**,
+nên lớp thứ hai nhận một Hikari pool trỏ vào container đã chết (`Connection to localhost:56700
+refused`). Sửa bằng singleton container.
+
+> 💡 **Câu để lại:** *"Một bộ test chưa chạy thì không phải là test — nó là mã nguồn có hình
+> dạng của test."*
+
+📌 **Bài học rộng hơn, và nó lặp lại BA lần trong đúng một ngày:** thư viện cũ **chạy được**
+với hạ tầng mới, chỉ là sai.
+
+| | Cũ | Mới | Triệu chứng |
+|---|---|---|---|
+| Testcontainers | 1.21.3 | Docker Engine 29 | `Skipped`, build xanh |
+| Jackson | 2 (`com.fasterxml.jackson.databind`) | 3 (`tools.jackson.databind`) | `package does not exist` |
+| springdoc | 2.9.0 | Spring Boot 4 | khởi động được, `/v3/api-docs` trả **500** |
+
+**Đọc số phiên bản trước khi đọc hướng dẫn.**
+
+---
+
+## 6. Cache chưa bao giờ chạy, và đoạn Javadoc cảnh báo về đúng chuyện đó nằm ngay phía trên
+
+| | |
+|---|---|
+| **Ngày** | 29/08/2026 |
+| **Hiện tượng** | Lại là **không có hiện tượng**. Thêm Redis + `@Cacheable` cho đường đọc số dư. App chạy, test xanh, Redis lên, không một dòng cảnh báo. Cache **chưa từng được dùng một lần nào**. |
+| **Tìm ra bằng cách nào** | Một test cố tình **sửa số dư thẳng trong database, không qua service**, rồi đọc lại. Nếu cache đang chạy thì phải ra **số cũ**. Nó ra số mới: `expected: 100000.00 but was: 777.00`. Đây là cách duy nhất chứng minh cache thật sự chạy — đọc code rồi tin thì không chứng minh được gì. |
+| **Nguyên nhân gốc** | `WalletCache` có một hàm bọc `find()` gọi `this.read()` cho gọn. Người gọi vào `find()` thì **đi qua proxy**, nhưng `find()` **không mang annotation nào**; còn lời gọi `read()` bên trong nó là `this.read()` — **không còn đi qua proxy**. Spring bỏ qua `@Cacheable` hoàn toàn. Đoạn Javadoc ở **đầu chính file đó** giải thích đúng cái bẫy này, và bẫy vẫn xảy ra ở cuối file. |
+| **Cách chữa** | Bỏ hàm bọc, gọi thẳng `cache.read()` từ `WalletService`. **Bài học tinh hơn cái đã biết:** *"để `@Cacheable` ở bean riêng"* **chưa đủ** — phải là **một lời gọi từ bean khác đến ĐÚNG method mang annotation**. Một lớp bọc mỏng đặt giữa, kể cả nằm trong chính bean đó, là đủ để vô hiệu hoá. |
+
+**Và cùng buổi đó, `cacheManager.getCache(...).clear()` cũng không xoá gì cả:**
+
+```
+TRƯỚC clear, get(viA) = ValueWrapper for [Wallet@43717598]
+SAU   clear, get(viA) = ValueWrapper for [Wallet@7ef432ce]    <- vẫn còn
+SAU   evict, get(viA) = null                                    <- evict thì xoá thật
+```
+
+Địa chỉ đối tượng **đổi giữa hai lần đọc** → nó thật sự được dựng lại từ Redis. *(Chưa truy ra
+cơ chế — chỉ ghi hành vi đã đo, và đổi cách viết theo nó.)* Dòng đó đang làm nhiệm vụ **cô lập
+test**, nên các test đã nhìn thấy bản cache của nhau.
+
+> 💡 **Câu để lại:** *"Ba lần trong một ngày, thứ hỏng đều là một câu lệnh trông như đang làm
+> việc mà không làm gì. Cách phát hiện luôn giống nhau: **phá dữ liệu sau lưng nó rồi hỏi
+> lại**."*
