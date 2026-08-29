@@ -118,6 +118,24 @@
 		</dependency>
 
 		<!--
+		  OpenAPI / Swagger UI.
+
+		  springdoc 3.x chu khong phai 2.x: 2.x built cho Spring Boot 3 va dung
+		  javax/jakarta + Spring Framework 6. Boot 4 doi Spring Framework len 7, nen 2.9.0
+		  khoi dong duoc nhung /v3/api-docs tra 500 - mot kieu hong kho doan hon han la khong
+		  bien dich duoc.
+
+		  📌 Cung ho voi bay Testcontainers 1.21.3 vs Docker 29 sang nay va Jackson 2 vs
+		  Jackson 3 chieu nay: THU VIEN CU CHAY DUOC voi ha tang moi, chi la sai. Doc so
+		  phien ban truoc khi doc huong dan.
+		-->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.1.0</version>
+		</dependency>
+
+		<!--
 		  Cache: hai starter chu khong mot.
 
 		  spring-boot-starter-cache mang ABSTRACTION (@Cacheable, @CacheEvict, CacheManager).

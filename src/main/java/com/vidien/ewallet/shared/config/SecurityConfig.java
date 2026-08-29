@@ -150,6 +150,20 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/ping", "/health").permitAll()
 
+                        // Swagger UI + ban mo ta OpenAPI. Mo cong khai, va day la mot QUYET
+                        // DINH chu khong phai mac dinh:
+                        //
+                        // Trang nay chi liet ke HINH DANG cua API - duong dan, truong, ma loi.
+                        // No khong lam duoc gi ma mot nguoi doc code frontend khong lam duoc,
+                        // va toan bo /api/wallets/** van doi token. Doi lai, no la thu MO RA
+                        // DUOC ngay trong buoi phong van.
+                        //
+                        // ⚠️ Voi mot he thong that co khach hang that thi nguoc lai: cong khai
+                        // ban mo ta API la tang mot tam ban do cho nguoi do endpoint. Luc do
+                        // khoa lai bang .authenticated() hoac tat han o profile production.
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
+                        .permitAll()
+
                         // Da khoa (28/08). Truoc do co y mo de khong chan phien lam FE, va
                         // FE gio da co man dang nhap nen mon no do dong duoc.
                         //
