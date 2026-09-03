@@ -46,6 +46,30 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
+      # ===== Cache =====
+      #
+      # ⭐ Hai bien nay truoc day la VIEC TAY: vao dashboard, tao Key Value, copy host va port,
+      # dan vao ba o. Ba buoc tay giua mot quy trinh tu dong = ba buoc som muon co ngay bi
+      # quen - va da quen that: cache TAT tren production tu 29/08 den 03/09 ma khong ai biet,
+      # vi app thieu Redis van chay dung, chi la cham hon.
+      #
+      # Do la loai loi te nhat: khong co trieu chung. Khong log, khong 500, khong test do.
+      # Chi la mot thu minh tin la co ma khong co.
+      - key: CACHE_TYPE
+        value: redis
+
+      # `fromService` = Render tu dien dia chi cua Key Value instance ben duoi vao day, sau
+      # khi tao xong. Khong phai copy tay, va doi ten/tao lai instance thi day tu theo.
+      #
+      # ⚠️ `property` cua mot keyvalue CHI CO `connectionString`. Khong co `host`, khong co
+      # `port` - hai cai do chi danh cho web/private service. Do la ly do application.properties
+      # doi sang `spring.data.redis.url`.
+      - key: REDIS_URL
+        fromService:
+          name: ewallet-cache
+          type: keyvalue
+          property: connectionString
+
       # Khoa ky JWT.
       #
       # generateValue: true = RENDER TU SINH mot chuoi ngau nhien luc tao bien,
@@ -66,6 +90,47 @@ services:
       # lan, va frontend da xu ly san: 401 kem token -> xoa phien -> ve /login.
       - key: JWT_SECRET
         generateValue: true
+
+  # ===================================================================
+  # Redis (Render gọi là "Key Value") - cache số dư ví, TTL 10 phút.
+  # ===================================================================
+  - type: keyvalue
+    name: ewallet-cache
+    plan: free
+
+    # ⚠️ PHẢI cùng region với web service. Khác region thì hai bên không nhìn
+    # thấy nhau qua mạng nội bộ, và `connectionString` trỏ vào một địa chỉ
+    # không route tới được - app khởi động bình thường rồi chết ở request đầu
+    # tiên chạm cache.
+    region: singapore
+
+    # ⭐ `allkeys-lru` chứ KHÔNG phải `noeviction`, và đây là quyết định chứ
+    # không phải mặc định.
+    #
+    # Đầy bộ nhớ thì `noeviction` làm mọi lệnh ghi ĐỔ, còn `allkeys-lru` vứt
+    # bớt key lâu không đụng tới. Với một hàng đợi công việc thì `noeviction`
+    # mới đúng - mất một job là mất thật. Với CACHE thì ngược lại: vứt một
+    # dòng cache đi chỉ tốn thêm một câu truy vấn, còn để lệnh ghi đổ là biến
+    # cache thành một chỗ hỏng mới.
+    #
+    # 📌 Câu để nhớ: cache là thứ MẤT ĐI ĐƯỢC. Nếu mất nó làm hỏng tính đúng
+    # đắn thì cái đó không phải cache, nó là database.
+    maxmemoryPolicy: allkeys-lru
+
+    # Rỗng = CHỈ cho kết nối từ mạng nội bộ của Render. Trường này BẮT BUỘC với
+    # keyvalue (khác web service - bỏ trống ở đó nghĩa là mở cho tất cả).
+    #
+    # Không mở ra ngoài: Redis không có tài khoản/mật khẩu như Postgres, ai nối
+    # được là đọc được sạch. Muốn xem bằng `redis-cli` thì dùng SSH tunnel của
+    # Render, đừng mở cổng.
+    ipAllowList: []
+
+# Gói free của Key Value KHÔNG lưu xuống đĩa - instance khởi động lại là mất
+# sạch dữ liệu. Với cache thì đó đúng là thứ chấp nhận được: mất cache chỉ có
+# nghĩa là vài request đầu đi hỏi Postgres.
+#
+# Và nó KHÔNG hết hạn sau 30 ngày như Postgres free của Render. Mỗi workspace
+# được một cái.
 
 # KHÔNG khai báo database ở đây. Database của Render HẾT HẠN SAU 30 NGÀY -
 # deploy 23/08 thì nó chết khoảng 22/09, đúng lúc bắt đầu rải CV.

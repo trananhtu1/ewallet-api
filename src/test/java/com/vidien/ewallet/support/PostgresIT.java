@@ -147,7 +147,16 @@ public abstract class PostgresIT {
         registry.add("app.reconciliation.enabled", () -> "false");
 
         registry.add("spring.cache.type", () -> "redis");
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+
+        // ⚠️ Phai la `url`, KHONG phai host + port.
+        //
+        // application.properties luon dat `spring.data.redis.url` (mac dinh localhost:6379),
+        // va Spring Boot cho `url` DE LEN host/port. Neu o day van dang ky host/port thi hai
+        // dong do bi bo qua, test se noi vao Redis o localhost thay vi container - va tren mot
+        // may co san Redis chay thi no VAN XANH, chi la dang test nham mot database khac.
+        //
+        // Loai loi im lang quen thuoc: khong do, chi sai.
+        registry.add("spring.data.redis.url",
+                () -> "redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379));
     }
 }
