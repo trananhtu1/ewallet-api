@@ -465,3 +465,69 @@ test**, nên các test đã nhìn thấy bản cache của nhau.
 > 💡 **Câu để lại:** *"Ba lần trong một ngày, thứ hỏng đều là một câu lệnh trông như đang làm
 > việc mà không làm gì. Cách phát hiện luôn giống nhau: **phá dữ liệu sau lưng nó rồi hỏi
 > lại**."*
+
+---
+
+## 7. `OutOfMemoryError: Metaspace` — và thứ bị gọi tên không phải thủ phạm
+
+| | |
+|---|---|
+| **Ngày** | 03/09/2026 |
+| **Hiện tượng** | Deploy sau khi thêm Redis vào Blueprint. Render báo `No open ports detected` rồi `Port scan timeout reached` — tiến trình **còn sống** nhưng không mở cổng nào. Log phía trên: `BeanCreationException: Error creating bean with name 'redisConnectionFactory' ... : Metaspace` / `Caused by: java.lang.OutOfMemoryError: Metaspace`. |
+| **Tìm ra bằng cách nào** | Chẩn đoán đầu tiên **sai**, và cái sửa nó là một phép đo. Đọc `redisConnectionFactory` rồi kết luận "Lettuce + Netty nạp thêm class → vượt trần 96m". Theo hướng đó thì `CACHE_TYPE=none` phải cứu được — **đã thử, đổ y hệt**. Đó là dữ kiện bác bỏ. Nên đo thay vì cãi: cùng một bản jar, cùng một máy, chỉ đổi một biến → `none` **114.6 MB**, `redis` **114.8 MB**. Redis tốn **0.2 MB**. |
+| **Nguyên nhân gốc** | App cần **~115 MB** metaspace, trần đặt **96 MB** trong `Dockerfile` từ hồi app còn nhỏ. Nó đã **vượt trần từ trước**, và vượt dần suốt một tháng: JPA entity, MapStruct mapper, springdoc, KYC, đối soát — mỗi thứ thêm vài nghìn class. `redisConnectionFactory` chỉ là **bean tình cờ được dựng đúng lúc chạm trần**. Và `CACHE_TYPE` vô tác dụng vì `DataRedisAutoConfiguration` điều kiện là `@ConditionalOnClass`, **không phải** `@ConditionalOnProperty` — có `spring-data-redis` trên classpath là Lettuce nạp hết, bất kể cờ. |
+| **Cách chữa** | **Chuyển ngân sách, không xin thêm.** Heap đặt 300m nhưng đo thật chỉ dùng **73 MB** — Hikari tối đa 5 kết nối, phân trang chặn 100 dòng, không chỗ nào đọc cả bảng lên RAM. Bớt heap xuống `176m`, nâng metaspace lên `160m`. Thêm ba trần trước đây để mặc định: `ReservedCodeCacheSize=48m`, `MaxDirectMemorySize=32m`, `-Xss512k`. Tomcat từ 200 thread xuống 20. Đo lại bằng đúng cờ production: **297 MB / 512 MB**. |
+
+### Vì sao `-Xmx300m` không cứu được
+
+Metaspace **nằm ngoài heap**. Hai vùng riêng, hai trần riêng:
+
+| Vùng | Chứa gì | Trần |
+|---|---|---|
+| Heap | đối tượng — `Wallet`, `BigDecimal`, response | `-Xmx` |
+| **Metaspace** | **metadata của class** — tên method, chữ ký, annotation | `-XX:MaxMetaspaceSize` |
+
+App có 300 MB heap rảnh rỗi mà vẫn chết, vì chỗ chật là chỗ khác.
+
+### Hai loại "hết bộ nhớ" khác hẳn nhau
+
+| | Ai giết | Dấu hiệu |
+|---|---|---|
+| `OutOfMemoryError: Metaspace` | **JVM tự báo** | có stack trace, đọc được |
+| OOM-kill của kernel | **hệ điều hành** | không log, không trace, chỉ thấy restart |
+
+Lần này là loại thứ nhất — **may**. Sự cố số 2 trong file này là loại thứ hai, và nó tốn nhiều thời gian hơn hẳn.
+
+⚠️ Đó cũng là lý do lần này thêm `MaxDirectMemorySize=32m`: Netty (nền của Lettuce) cấp phát buffer **ngoài heap** và mặc định bằng `-Xmx`. Không chặn thì chỗ đó phình âm thầm cho tới khi kernel giết container — tức là **biến một lỗi đọc được thành một lỗi không đọc được**.
+
+### Cách đo, chép lại chạy được
+
+```bash
+# Nới trần lên thật cao để ĐO ĐƯỢC ĐỈNH, không phải để chạy như vậy
+java -Xmx176m -XX:MaxMetaspaceSize=400m -XX:+UseSerialGC -jar target/ewallet-api-*.jar &
+PID=$!
+
+# Đợi app lên HẲN - đo sớm là đo thiếu, class nạp dần theo request đầu tiên
+until curl -s -o /dev/null --max-time 2 http://localhost:3003/ping; do sleep 3; done
+
+jcmd $PID GC.heap_info | grep Metaspace
+#   Metaspace  used 114841K, committed 115520K, reserved 262144K
+
+# Bức tranh đầy đủ - cần -XX:NativeMemoryTracking=summary lúc khởi động
+jcmd $PID VM.native_memory summary | grep -E "^Total|Java Heap \(|Class \(|Thread \(|Code \("
+#   Total: reserved=582094KB, committed=296822KB
+```
+
+📌 **`committed` mới là RAM đã thực sự chiếm.** `reserved` chỉ là không gian địa chỉ JVM giữ chỗ — nhìn `reserved=582MB` mà hoảng là hiểu nhầm; con số phải so với 512MB là `committed`.
+
+### 💡 Câu để lại
+
+> **Stack trace gọi tên giọt nước cuối cùng, không gọi tên cái bình đầy.**
+
+Cùng hình dạng với **sự cố số 10 của `PROGRESS.md`** *(25/08, `create_at`)*: stack trace đổ tội cho một câu SQL đúng, vì nó chỉ biết chỗ **phát hiện** ra lỗi, không biết chỗ **gây** ra lỗi.
+
+Và một câu nữa, rút từ chỗ `CACHE_TYPE=none` không cứu được:
+
+> **Một cờ tắt tính năng tắt HÀNH VI, nó không tắt việc NẠP CLASS.**
+
+📌 Bài học vận hành: khi một giới hạn được đặt bằng con số cứng — `MaxMetaspaceSize`, `maximum-pool-size`, `max-file-size` — thì **con số đó có tuổi**. Nó đúng vào ngày đặt và mục ruỗng dần theo mỗi thư viện được thêm vào. Không có gì nhắc, cho tới ngày nó đổ.
