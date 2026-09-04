@@ -32,6 +32,7 @@ public record TransactionView(
         String type,
         String status,
         Long counterpartyWalletId,
+        String note,
         Instant createdAt) {
 
     /** direction tinh theo GOC NHIN cua vi dang xem: cung mot dong, hai vi thay hai chieu. */
@@ -48,6 +49,7 @@ public record TransactionView(
                 tx.getType().name(),
                 tx.getStatus().name(),
                 counterparty,
+                tx.getNote(),
                 tx.getCreatedAt());
     }
 }

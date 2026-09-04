@@ -50,6 +50,36 @@ public class TransferService {
     @Transactional
     public Wallet transfer(long fromWalletId, long toWalletId, BigDecimal amount,
             long callerWalletId, String idempotencyKey) {
+        return transfer(fromWalletId, toWalletId, amount, callerWalletId, idempotencyKey, null);
+    }
+
+    /**
+     * Ban co loi nhan - <b>day moi la ban that</b>, controller goi thang vao day. Ban 5 tham so
+     * o tren chi la loi tat cho test va cac cho goi cu.
+     *
+     * <p>
+     * ⚠️⚠️ {@code @Transactional} PHAI co o CA HAI, va day la mot bay da dinh that.
+     *
+     * <p>
+     * Luc them ban nay, annotation cu nam tren chu ky 5 tham so va o nguyen do - nghia la ban
+     * 6 tham so, <b>cai ma controller goi</b>, khong he co transaction. Ket qua:
+     * {@code TransactionRequiredException: No EntityManager with actual transaction available}
+     * - HTTP 500 cho mot lenh chuyen tien hoan toan hop le.
+     *
+     * <p>
+     * Va no khong the bat duoc luc bien dich: hai method cung ten, cung lop, chi khac mot tham
+     * so. Nhin thi giong nhau y het.
+     *
+     * <p>
+     * 📌 Vi sao khong bo annotation o ban 5 tham so cho gon: ban do goi ban nay bang
+     * {@code this}, tuc la <b>khong di qua proxy</b> cua Spring - annotation o ban 6 tham so se
+     * khong duoc doc. De o ca hai thi loi goi ngoai vao ban nao cung mo duoc transaction, va
+     * loi goi trong tu dong join vao transaction da mo. Cung mot luat da hoc o buoi
+     * REQUIRES_NEW: <b>Spring chi thay nhung loi goi di qua proxy.</b>
+     */
+    @Transactional
+    public Wallet transfer(long fromWalletId, long toWalletId, BigDecimal amount,
+            long callerWalletId, String idempotencyKey, String note) {
         // ⭐ CHO BIT LO BOLA, va day la ca thuan nhat cua no: vi NGUON den tu BODY.
         // Khong co dong nay thi bat ky ai dang ky xong deu goi duoc
         //     POST /api/transfers {"fromWalletId": 1, "toWalletId": <vi cua toi>, ...}
@@ -193,6 +223,9 @@ public class TransferService {
                 .type(TransactionType.TRANSFER)
                 .status(TransactionStatus.SUCCESS)
                 .idempotencyKey(idempotencyKey)
+                // Chuoi rong -> null. "Da go roi xoa" va "chua bao gio go" nen la MOT gia tri
+                // trong database, neu khong thi moi cho doc phai kiem ca hai.
+                .note(note == null || note.isBlank() ? null : note.strip())
                 .build());
 
         log.info("Chuyen {} tu vi {} sang vi {}", amount, fromWalletId, toWalletId);

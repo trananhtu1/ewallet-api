@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 public record TransferRequest(
         // Long (bọc) chứ KHÔNG phải long (nguyên thuỷ) - đây là bẫy im lặng.
@@ -33,5 +34,17 @@ public record TransferRequest(
         // ở biên, thay vì để nó nổ thành exception khó hiểu từ driver Postgres.
         @NotNull(message = "Số tiền không được để trống") @DecimalMin(value = "0.01",
                 message = "Số tiền tối thiểu là 0.01") @Digits(integer = 17, fraction = 2,
-                        message = "Số tiền tối đa 2 chữ số thập phân") BigDecimal amount) {
+                        message = "Số tiền tối đa 2 chữ số thập phân") BigDecimal amount,
+
+        /**
+         * Loi nhan, tuy chon.
+         *
+         * <p>
+         * KHONG {@code @NotBlank}: khong nhan gi la mot lua chon hop le. Nhung
+         * {@code @Size(max = 140)} thi BAT BUOC - o nay hien ra tren man hinh nguoi
+         * nhan, tuc la mot duong gui chu toi thiet bi cua nguoi khac. Cot trong
+         * database cung gioi han 140, va hai cho deu kiem: DTO chan som de bao loi
+         * tu te, rang buoc cot la thu cuoi cung con dung neu co ai ghi thang vao bang.
+         */
+        @Size(max = 140, message = "Lời nhắn tối đa 140 ký tự") String note) {
 }
