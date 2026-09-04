@@ -20,8 +20,8 @@ services:
     #
     # Trước đây trỏ vào /health và đó là nguyên nhân lần deploy đầu 20/08 đổ:
     # /health đi hỏi Neon, mật khẩu sai nên Hikari chờ hết connection-timeout 10s,
-    # Render bỏ cuộc trước đó. Bài học ghi ở INCIDENTS.md mục 3: liveness probe
-    # không được phụ thuộc dịch vụ ngoài. Neon free tự ngủ - kể cả không ai sai
+    # Render bỏ cuộc trước đó. Bài học: liveness probe KHÔNG được phụ thuộc vào
+    # một dịch vụ ngoài. Neon free tự ngủ - kể cả không ai sai
     # mật khẩu thì sớm muộn cũng có ngày deploy trúng lúc nó đang ngủ.
     #
     # /health vẫn còn, vẫn chạm database, vẫn cố ý trả 200 khi DB lỗi - nhưng

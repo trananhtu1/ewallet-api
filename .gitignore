@@ -34,3 +34,6 @@ bin/
 ### OS ###
 .DS_Store
 Thumbs.db
+
+# Tai lieu noi bo - da chuyen sang repo private java-learn/noi-bo/
+INCIDENTS.md

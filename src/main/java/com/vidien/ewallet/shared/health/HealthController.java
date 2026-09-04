@@ -23,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>{@code /ping} trả lời "tiến trình còn sống không". KHÔNG chạm database.
  * Đây là cái Render gọi liên tục (healthCheckPath). Health check của nền tảng mà
  * đi hỏi dịch vụ ngoài thì dịch vụ ngoài ngủ là app bị khai tử oan - đúng thứ đã
- * làm lần deploy đầu 20/08 đổ, xem INCIDENTS.md mục 3.
+ * làm lần deploy đầu 20/08 đổ: sai mật khẩu -> Hikari chờ hết connection-timeout
+ * 10 giây -> health check hết giờ -> Render kết luận app chết và gửi SIGTERM.
  *
  * <p>{@code /health} trả lời "mọi thứ có ổn không": Java nào, profile nào, Neon
  * nối được chưa và mất bao lâu. Dành cho người, lúc chẩn đoán. Được phép chạm
