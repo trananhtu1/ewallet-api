@@ -64,6 +64,6 @@ public class TransferController {
                             message = "Idempotency-Key toi da 64 ky tu") String idempotencyKey) {
 
         return walletMapper.toResponse(transferService.transfer(request.fromWalletId(), request.toWalletId(),
-                request.amount(), Caller.walletId(jwt), idempotencyKey));
+                request.amount(), Caller.walletId(jwt), idempotencyKey, request.note()));
     }
 }

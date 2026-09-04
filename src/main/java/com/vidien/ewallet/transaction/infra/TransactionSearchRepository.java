@@ -57,8 +57,12 @@ public class TransactionSearchRepository {
     }
 
     private static final String COT = """
-            id, from_wallet_id, to_wallet_id, amount, type, status, idempotency_key, created_at
+            id, from_wallet_id, to_wallet_id, amount, type, status, idempotency_key, note, created_at
             """;
+    // ⚠️ Liet ke cot bang tay chu khong SELECT *, va do la co y: them mot cot vao bang ma
+    // quen dong nay thi row mapper doc `rs.getString("note")` se nem
+    // "column not found" - vo NGAY va noi ro thieu gi. SELECT * thi cot moi tu
+    // chay vao, va cai vo se la mot cho khac, muon hon, kho lan hon.
 
     /**
      * Mot trang lich su, co loc va co cursor.
@@ -170,6 +174,7 @@ public class TransactionSearchRepository {
                 .type(TransactionType.valueOf(rs.getString("type")))
                 .status(TransactionStatus.valueOf(rs.getString("status")))
                 .idempotencyKey(rs.getString("idempotency_key"))
+                .note(rs.getString("note"))
                 .createdAt(rs.getObject("created_at", OffsetDateTime.class).toInstant())
                 .build();
     }

@@ -71,6 +71,18 @@ public class Transaction {
     @Column(name = "idempotency_key", length = 64)
     private String idempotencyKey;
 
+    /**
+     * Loi nhan do nguoi chuyen go. {@code null} = khong co.
+     *
+     * <p>
+     * ⚠️ Cot nay HIEN RA cho nguoi nhan, tuc la mot duong gui chu toi man hinh nguoi khac.
+     * Gioi han 140 ky tu lam no het dung duoc cho viec rai noi dung. Frontend phai hien no
+     * nhu VAN BAN THUAN - React tu escape, nhung ngay nao co ai dung
+     * {@code dangerouslySetInnerHTML} cho o nay thi day la duong XSS luu tru.
+     */
+    @Column(length = 140)
+    private String note;
+
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private Instant createdAt;
 }
