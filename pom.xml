@@ -105,6 +105,38 @@
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 
+		<!-- AWS SDK v2, chi module S3.
+		     ⭐ Dung SDK cua AWS de noi chuyen voi mot kho KHONG PHAI cua AWS - va do
+		     la ca diem: giao thuc S3 la chuan chung, moi kho tuong thich deu nhan
+		     dung API nay. Doi tu Supabase sang S3 that, sang Cloudflare R2 hay sang
+		     MinIO chi la doi mot bien moi truong `endpoint`, khong sua mot dong code.
+
+		     Chi keo module `s3`, khong keo `aws-sdk-java` tron goi - goi day du la
+		     hang tram service khong ai dung, va metaspace vua day thang 03/09. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.31.78</version>
+			<exclusions>
+				<!-- SDK mac dinh keo Apache HttpClient. Da co netty tu Lettuce roi,
+				     va URL Connection client la thu nhe nhat du dung cho vai lan goi
+				     mot phut. Bot ~4MB jar va mot dong class trong metaspace. -->
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>apache-client</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>netty-nio-client</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>url-connection-client</artifactId>
+			<version>2.31.78</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

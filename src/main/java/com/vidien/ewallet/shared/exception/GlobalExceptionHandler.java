@@ -13,6 +13,8 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import com.vidien.ewallet.avatar.domain.exception.AvatarStorageDisabledException;
+import com.vidien.ewallet.avatar.domain.exception.InvalidAvatarException;
 import com.vidien.ewallet.beneficiary.domain.exception.BeneficiaryAlreadySavedException;
 import com.vidien.ewallet.beneficiary.domain.exception.BeneficiaryNotFoundException;
 import com.vidien.ewallet.auth.domain.exception.EmailAlreadyUsedException;
@@ -287,6 +289,36 @@ public class GlobalExceptionHandler {
          * quan he cua no voi mot dong da ton tai - dung cach phan biet da dung cho khoa
          * chong lap.
          */
+        /** Tep gui len khong dung la anh -> 400. */
+        @ExceptionHandler(InvalidAvatarException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidAvatar(InvalidAvatarException e,
+                        HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(400, "INVALID_AVATAR", e.getMessage(),
+                                request.getRequestURI());
+
+                return ResponseEntity.badRequest().body(body);
+        }
+
+        /**
+         * Kho anh chua duoc cau hinh -> 503.
+         *
+         * <p>
+         * 503 chu khong 500: khong co gi hong ca. May chu nay chi khong bat tinh nang do, va
+         * 503 la ma noi dung dieu ay - "dich vu khong san sang", khong phai "co loi".
+         */
+        @ExceptionHandler(AvatarStorageDisabledException.class)
+        public ResponseEntity<ErrorResponse> handleStorageDisabled(
+                        AvatarStorageDisabledException e, HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(503, "STORAGE_DISABLED", e.getMessage(),
+                                request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
+        }
+
         @ExceptionHandler(BeneficiaryAlreadySavedException.class)
         public ResponseEntity<ErrorResponse> handleBeneficiarySaved(
                         BeneficiaryAlreadySavedException e, HttpServletRequest request) {
