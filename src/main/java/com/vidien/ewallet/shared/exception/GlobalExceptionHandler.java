@@ -13,6 +13,8 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import com.vidien.ewallet.beneficiary.domain.exception.BeneficiaryAlreadySavedException;
+import com.vidien.ewallet.beneficiary.domain.exception.BeneficiaryNotFoundException;
 import com.vidien.ewallet.auth.domain.exception.EmailAlreadyUsedException;
 import com.vidien.ewallet.auth.domain.exception.InvalidCredentialsException;
 import com.vidien.ewallet.auth.domain.exception.InvalidRefreshTokenException;
@@ -277,6 +279,45 @@ public class GlobalExceptionHandler {
          * thong khong cho phep. 400 se khien nguoi dung tuong minh chup anh sai va chup lai -
          * vo ich. Cung ly do voi INSUFFICIENT_FUNDS.
          */
+        /**
+         * Luu mot vi da co trong so dia chi -> 409.
+         *
+         * <p>
+         * 409 chu khong 400: request nay <b>mot minh no hoan toan hop le</b>. Cai sai la
+         * quan he cua no voi mot dong da ton tai - dung cach phan biet da dung cho khoa
+         * chong lap.
+         */
+        @ExceptionHandler(BeneficiaryAlreadySavedException.class)
+        public ResponseEntity<ErrorResponse> handleBeneficiarySaved(
+                        BeneficiaryAlreadySavedException e, HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(409, "BENEFICIARY_ALREADY_SAVED",
+                                e.getMessage(), request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+        }
+
+        /**
+         * Khong tim thay nguoi nhan -> 404.
+         *
+         * <p>
+         * ⚠️ Ngoai le nay duoc nem cho CA hai truong hop: khong ton tai, va thuoc ve
+         * nguoi khac. Tra 403 cho truong hop thu hai la mot cau tra loi CO - no xac
+         * nhan dong do ton tai, va nguoi hoi chi can dem so lan nhan 403 la ve duoc
+         * ban do so dia chi cua nguoi khac.
+         */
+        @ExceptionHandler(BeneficiaryNotFoundException.class)
+        public ResponseEntity<ErrorResponse> handleBeneficiaryNotFound(
+                        BeneficiaryNotFoundException e, HttpServletRequest request) {
+                log.warn("{} tai {}", e.getMessage(), request.getRequestURI());
+
+                ErrorResponse body = ErrorResponse.of(404, "BENEFICIARY_NOT_FOUND", e.getMessage(),
+                                request.getRequestURI());
+
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+        }
+
         @ExceptionHandler(KycAlreadyPendingException.class)
         public ResponseEntity<ErrorResponse> handleKycPending(KycAlreadyPendingException e,
                         HttpServletRequest request) {
