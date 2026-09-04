@@ -51,4 +51,18 @@ public class User {
 
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private Instant createdAt;
+
+    /** Khoa cua anh trong kho, vi du {@code avatars/8.jpg}. {@code null} = chua co anh. */
+    @Column(name = "avatar_key", length = 200)
+    private String avatarKey;
+
+    /**
+     * Moc doi anh gan nhat - dung lam tham so chong bo nho dem cua trinh duyet.
+     *
+     * <p>
+     * Khoa anh co dinh theo userId nen URL khong doi khi doi anh; thieu moc nay thi nguoi
+     * dung doi xong van nhin thay mat cu. Xem {@code AvatarService.urlCong}.
+     */
+    @Column(name = "avatar_updated_at")
+    private Instant avatarUpdatedAt;
 }
