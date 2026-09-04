@@ -91,7 +91,18 @@ public class AvatarService {
 
         // Khoa co dinh theo userId, khong sinh ten ngau nhien: doi anh lan hai la GHI DE, va
         // khong tich luy rac. Doi lai la khong co lich su anh cu - dung y muon.
-        String khoa = "avatars/" + userId + ".jpg";
+        //
+        // ⚠️ Khoa KHONG chua ten bucket. Ba thu nay de nham lan, va nham thi ra mot duong
+        // dan lap:
+        //
+        //   bucket     = "avatars"        <- cai NGAN chua file
+        //   khoa       = "8.jpg"          <- duong dan BEN TRONG ngan do
+        //   URL cong   = <public-url>/8.jpg
+        //                 └ .../object/public/avatars  (da co ten bucket o day roi)
+        //
+        // Ban dau khoa la "avatars/8.jpg" -> URL ra .../public/avatars/avatars/8.jpg. Van tai
+        // duoc anh, nen khong co gi bao loi - chi la mot doan duong dan thua nam do mai mai.
+        String khoa = userId + ".jpg";
 
         client.putObject(PutObjectRequest.builder()
                 .bucket(bucket)

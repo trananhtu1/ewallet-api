@@ -70,6 +70,37 @@ services:
           type: keyvalue
           property: connectionString
 
+      # ===== Kho ảnh đại diện (tương thích S3) =====
+      #
+      # Sáu biến, và chúng đi VỚI NHAU: thiếu một cái thì app vẫn khởi động bình
+      # thường nhưng đổi ảnh trả 503. Đó là chủ ý — một tính năng phụ không được
+      # quyền làm cả hệ thống không lên được.
+      #
+      # ⚠️ ENDPOINT và PUBLIC_URL cùng host, KHÁC path, và dễ điền nhầm nhau:
+      #   endpoint   .../storage/v1/s3                      ← nơi GHI, có ký
+      #   public-url .../storage/v1/object/public/avatars    ← nơi ĐỌC, công khai
+      #
+      # public-url phải trỏ THẲNG BÊN TRONG bucket vì khoá file không chứa tên
+      # bucket. Điền thiếu đoạn `/avatars` cuối thì ảnh tải về 404.
+      - key: STORAGE_ENABLED
+        value: "true"
+      - key: STORAGE_BUCKET
+        value: avatars
+      - key: STORAGE_REGION
+        # Kho không phải AWS vẫn đòi một tên vùng; nó chỉ tham gia vào việc tính
+        # chữ ký, không trỏ vào đâu cả.
+        value: auto
+
+      # sync: false = Render HỎI lúc apply, KHÔNG lưu vào git.
+      - key: STORAGE_ENDPOINT
+        sync: false
+      - key: STORAGE_PUBLIC_URL
+        sync: false
+      - key: STORAGE_ACCESS_KEY
+        sync: false
+      - key: STORAGE_SECRET_KEY
+        sync: false
+
       # Khoa ky JWT.
       #
       # generateValue: true = RENDER TU SINH mot chuoi ngau nhien luc tao bien,
